@@ -1,0 +1,140 @@
+/* ==========================================================================
+   Design tokens — Industrial Slate & Heat Energy
+   라이트 팔레트를 :root에 정의하고, 다크는 같은 토큰만 재정의한다.
+   ========================================================================== */
+
+:root {
+  /* Brand palette (spec) */
+  --c-bg: #f8f9fa;
+  --c-surface: #ffffff;
+  --c-ink: #1a2332;          /* Primary text & borders */
+  --c-ink-2: #4a5568;        /* Secondary text */
+  --c-accent: #d95d39;       /* Accent / CTA */
+  --c-normal: #10b981;
+  --c-caution: #f59e0b;
+  --c-warning: #ef4444;
+
+  /* Derived surfaces & lines */
+  --c-surface-2: #f1f3f5;
+  --c-surface-sunken: #eef1f4;
+  --c-line: rgba(26, 35, 50, 0.12);
+  --c-line-strong: rgba(26, 35, 50, 0.24);
+  --c-ink-3: #636e80;        /* tertiary / captions — 4.6:1 on #F1F3F5, 5.2:1 on #FFF (WCAG AA) */
+
+  /* Header (always slate) */
+  --c-header-bg: #1a2332;
+  --c-header-ink: #f8f9fa;
+  --c-header-ink-2: rgba(248, 249, 250, 0.68);
+  --c-header-line: rgba(248, 249, 250, 0.14);
+
+  /* Status tints (operational) */
+  --c-normal-bg: rgba(16, 185, 129, 0.12);
+  --c-normal-ink: #047857;
+  --c-caution-bg: rgba(245, 158, 11, 0.14);
+  --c-caution-ink: #b45309;
+  --c-warning-bg: rgba(239, 68, 68, 0.12);
+  --c-warning-ink: #b91c1c;
+  --c-trip-bg: #ef4444;
+  --c-trip-ink: #ffffff;
+
+  /* Data-reliability badges — deliberately neutral slate, dashed outline */
+  --c-data-ink: #3b4a5f;
+  --c-data-line: rgba(59, 74, 95, 0.45);
+  --c-data-bg: rgba(59, 74, 95, 0.05);
+  --c-data-impl-ink: #1f6f8b;
+  --c-data-impl-line: rgba(31, 111, 139, 0.5);
+  --c-data-impl-bg: rgba(31, 111, 139, 0.07);
+
+  --c-accent-soft: rgba(217, 93, 57, 0.1);
+  --c-accent-ink: #b8461f;
+
+  /* Primary CTA button: white on #D95D39 is 3.8:1 (fails AA for 13px text),
+     so the filled button uses the darker accent step (5.3:1). #D95D39 stays the
+     accent for tabs, focus rings, markers and outlines. */
+  --c-cta-bg: #b8461f;
+  --c-cta-ink: #ffffff;
+
+  /* Chart categorical (validated: CVD ΔE 18.9, normal ΔE 29.0 on light) */
+  --c-chart-1: #d95d39;      /* 세정 비용 */
+  --c-chart-2: #2f6fb0;      /* 월간 편익 · 손실 곡선 */
+
+  /* Typography */
+  --font-sans: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Malgun Gothic', 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
+
+  --fs-xs: 0.75rem;   /* 12 */
+  --fs-sm: 0.8125rem; /* 13 */
+  --fs-md: 0.9375rem; /* 15 */
+  --fs-lg: 1.125rem;  /* 18 */
+  --fs-xl: 1.5rem;    /* 24 */
+  --fs-kpi: 2rem;     /* 32 */
+
+  /* Shape & depth */
+  --radius-sm: 6px;
+  --radius: 10px;     /* cards: 8~12px 범위 내 통일 */
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(26, 35, 50, 0.06), 0 1px 3px rgba(26, 35, 50, 0.04);
+  --shadow-raised: 0 4px 14px rgba(26, 35, 50, 0.08);
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --content-max: 1280px;
+  --gutter: clamp(16px, 3vw, 32px);
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --c-bg: #0f141c;
+  --c-surface: #171e29;
+  --c-ink: #e6eaf0;
+  --c-ink-2: #a3aebd;
+  --c-ink-3: #8a96a8;        /* 5.6:1 on dark surface */
+  --c-accent: #e9744f;
+
+  --c-surface-2: #1d2532;
+  --c-surface-sunken: #121821;
+  --c-line: rgba(230, 234, 240, 0.1);
+  --c-line-strong: rgba(230, 234, 240, 0.2);
+
+  --c-header-bg: #0b1017;
+  --c-header-line: rgba(248, 249, 250, 0.1);
+
+  --c-normal-bg: rgba(16, 185, 129, 0.16);
+  --c-normal-ink: #34d399;
+  --c-caution-bg: rgba(245, 158, 11, 0.16);
+  --c-caution-ink: #fbbf24;
+  --c-warning-bg: rgba(239, 68, 68, 0.16);
+  --c-warning-ink: #f87171;
+
+  --c-data-ink: #b4c0d0;
+  --c-data-line: rgba(180, 192, 208, 0.4);
+  --c-data-bg: rgba(180, 192, 208, 0.05);
+  --c-data-impl-ink: #6cc3df;
+  --c-data-impl-line: rgba(108, 195, 223, 0.45);
+  --c-data-impl-bg: rgba(108, 195, 223, 0.07);
+
+  --c-accent-soft: rgba(233, 116, 79, 0.14);
+  --c-accent-ink: #f0916f;
+
+  /* Dark: accent fill with dark ink (≈6:1) */
+  --c-cta-bg: #e9744f;
+  --c-cta-ink: #0f141c;
+
+  /* Chart categorical — dark steps (validated: CVD ΔE 20.8, normal ΔE 27.0) */
+  --c-chart-1: #d9643f;
+  --c-chart-2: #4a8ad0;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 6px 18px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}

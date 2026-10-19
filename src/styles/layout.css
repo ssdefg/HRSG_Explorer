@@ -1,0 +1,347 @@
+/* ==========================================================================
+   App shell: header, tab nav, mock banner, page layout, footer
+   ========================================================================== */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* ---- Header -------------------------------------------------------------- */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--c-header-bg);
+  color: var(--c-header-ink);
+  border-bottom: 1px solid var(--c-header-line);
+}
+
+.header__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 60px;
+  padding-block: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.brand__logo {
+  flex: none;
+  width: 34px;
+  height: 34px;
+}
+
+.brand__text {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.brand__name {
+  font-size: var(--fs-md);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand__name-short {
+  display: none;
+}
+
+.brand__sub {
+  font-size: var(--fs-xs);
+  color: var(--c-header-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.sys-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--c-header-line);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--c-header-ink-2);
+}
+
+.sys-status__label {
+  font-weight: 600;
+}
+
+/* 좁은 화면에서 단어 중간 줄바꿈 대신 항목 단위로 줄바꿈 */
+.sys-status {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.sys-status__label,
+.sys-status__unit,
+.sys-status__alarm,
+.sys-status__updated {
+  white-space: nowrap;
+}
+
+.sys-status__mock {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
+  border: 1px dashed var(--c-header-ink-2);
+  border-radius: 4px;
+  color: var(--c-header-ink-2);
+  white-space: nowrap;
+}
+
+.sys-status__unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--c-header-ink);
+  font-weight: 600;
+}
+
+.sys-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.sys-status__dot--normal { background: var(--c-normal); }
+.sys-status__dot--caution { background: var(--c-caution); }
+.sys-status__dot--warning { background: var(--c-warning); }
+.sys-status__dot--trip { background: var(--c-warning); box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35); }
+
+.sys-status__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--c-header-line);
+}
+
+.sys-status__alarm strong {
+  color: var(--c-caution);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Tabs ---------------------------------------------------------------- */
+.tabs {
+  display: flex;
+  gap: var(--sp-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-inline: calc(var(--gutter) * -1);
+  padding-inline: var(--gutter);
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 10px 14px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--c-header-ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--c-header-ink);
+}
+
+.tab__num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--c-header-ink);
+}
+
+.tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--c-accent);
+}
+
+.tab__short {
+  display: none;
+}
+
+/* ---- Mock data banner ---------------------------------------------------- */
+.mock-banner {
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-line);
+}
+
+.mock-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-block: 10px;
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+  color: var(--c-ink-2);
+}
+
+/* ---- Main / page --------------------------------------------------------- */
+.main {
+  flex: 1;
+  padding-block: var(--sp-6) var(--sp-8);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.page-head__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--c-accent-ink);
+  text-transform: uppercase;
+}
+
+.page-head__title {
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.page-head__desc {
+  color: var(--c-ink-2);
+  max-width: 72ch;
+}
+
+.page-head__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+
+.section-title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--c-ink-2);
+  margin-bottom: calc(var(--sp-2) * -1);
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+/* ---- Footer -------------------------------------------------------------- */
+.footer {
+  border-top: 1px solid var(--c-line);
+  padding-block: var(--sp-4);
+  font-size: var(--fs-xs);
+  color: var(--c-ink-3);
+}
+
+/* ---- Responsive ---------------------------------------------------------- */
+@media (max-width: 1100px) {
+  .brand__sub {
+    max-width: 46ch;
+  }
+}
+
+@media (max-width: 860px) {
+  .header__bar {
+    row-gap: var(--sp-2);
+  }
+  .brand {
+    flex-basis: 100%;
+  }
+  .header__tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 640px) {
+  /* 모바일에서는 헤더가 화면을 과도하게 점유하지 않도록 고정 해제,
+     전역 배지는 바로 아래 안내 배너에서 노출된다. */
+  .header {
+    position: static;
+  }
+  .header__tools > .badge--mock {
+    display: none;
+  }
+  .brand__name-full {
+    display: none;
+  }
+  .brand__name-short {
+    display: inline;
+  }
+  .brand__sub {
+    max-width: none;
+    white-space: normal;
+  }
+  .tab__full {
+    display: none;
+  }
+  .tab__short {
+    display: inline;
+  }
+  .tab {
+    padding-inline: 10px;
+  }
+  .section-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page-head__title {
+    font-size: 1.3rem;
+  }
+  .sys-status__updated {
+    display: none;
+  }
+}
