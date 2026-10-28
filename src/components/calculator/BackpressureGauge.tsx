@@ -3,7 +3,7 @@ import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber } from '@/lib/format';
 import { BP_THRESHOLDS } from '@/lib/calc';
-import type { CalculatorState } from '@/lib/useCalculatorState';
+import type { CalculatorState } from '@/context/Workspace';
 import { LEVEL_STATUS, levelLabel } from './level';
 
 const CX = 120;
@@ -33,7 +33,8 @@ export function BackpressureGauge({ state }: { state: CalculatorState }) {
   const { lang } = useAppSettings();
   const c = useCalcText();
   const { currentBp, referenceBp, loadPct, exhaustTemp } = state.values;
-  const { deltaBp, level } = state.result;
+  const deltaBp = state.metrics.deltaBp.value;
+  const level = state.level;
   const max = gaugeMax(currentBp, referenceBp);
   const n = (x: number | null) => (x === null ? '—' : formatNumber(x, lang, 0));
 

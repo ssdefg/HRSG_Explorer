@@ -8,8 +8,18 @@ const { daysBefore: PRE, daysAfter: POST } = VALIDATION_SCENARIO;
  * 자료 요청 이메일 초안 생성 — 순수 함수.
  * 실제 수신자 주소를 만들지 않고 자리표시자를 남긴다. 발송 기능은 없다.
  */
-export function buildRequestEmail(items: ChecklistItem[], lang: Lang): { subject: string; body: string } {
+export interface EmailOptions {
+  /** 고객사/발전소명 — 비어 있으면 자리표시자 */
+  clientName?: string;
+  /** 항목별 단위·측정 조건 (체크리스트 메타데이터) */
+  meta?: Record<string, { unit?: string; condition?: string }>;
+  /** 항목별 비고 — 추가 설명으로 포함 */
+  notes?: Record<string, string>;
+}
+
+export function buildRequestEmail(items: ChecklistItem[], lang: Lang, opts: EmailOptions = {}): { subject: string; body: string } {
   const ko = lang === 'ko';
+  const client = opts.clientName?.trim() || (ko ? '[고객사/발전소명]' : '[client / plant name]');
   const cats: ChecklistCategory[] = ['A', 'B', 'C'];
   const lines: string[] = [];
 
@@ -19,13 +29,19 @@ export function buildRequestEmail(items: ChecklistItem[], lang: Lang): { subject
     lines.push(`[${CHECKLIST_CATEGORY_LABEL[cat][lang]}]`);
     list.forEach((i, idx) => {
       lines.push(`  ${idx + 1}. ${i.name[lang]} — ${i.format[lang]}`);
+      const unit = opts.meta?.[i.id]?.unit?.trim();
+      const cond = opts.meta?.[i.id]?.condition?.trim();
+      const note = opts.notes?.[i.id]?.trim();
+      if (unit) lines.push(`     · ${ko ? '필요 단위' : 'Unit'}: ${unit}`);
+      if (cond) lines.push(`     · ${ko ? '측정 조건' : 'Measurement condition'}: ${cond}`);
+      if (note) lines.push(`     · ${ko ? '추가 설명' : 'Note'}: ${note}`);
     });
     lines.push('');
   }
 
   if (ko) {
     return {
-      subject: '[HRSG 협력 프로젝트] 운전·설계 데이터 자료 요청드립니다',
+      subject: `[HRSG 협력 프로젝트] ${client} 운전·설계 데이터 자료 요청드립니다`,
       body: [
         '[수신자 성함/직함]님께,',
         '',
@@ -33,6 +49,8 @@ export function buildRequestEmail(items: ChecklistItem[], lang: Lang): { subject
         '항상 프로젝트에 협조해 주셔서 감사드립니다.',
         '',
         '현재 저희는 HRSG Maintenance Decision Support Platform 프로토타입을 개발하고 있으며, 화면의 수치는 모두 시연용 가상 데이터로 구성되어 있습니다. 성능 저하 및 세정 경제성 분석을 실제 설비 조건에 맞게 검토하기 위해 아래 자료를 요청드리고자 합니다.',
+        '',
+        `■ 대상: ${client}`,
         '',
         `■ 요청 자료 (${items.length}건)`,
         ...lines,
@@ -57,7 +75,7 @@ export function buildRequestEmail(items: ChecklistItem[], lang: Lang): { subject
   }
 
   return {
-    subject: '[HRSG joint project] Request for operating and design data',
+    subject: `[HRSG joint project] Request for operating and design data — ${client}`,
     body: [
       'Dear [recipient name / title],',
       '',
@@ -65,6 +83,8 @@ export function buildRequestEmail(items: ChecklistItem[], lang: Lang): { subject
       'Thank you for your continued support.',
       '',
       'We are developing a prototype of the HRSG Maintenance Decision Support Platform, and all figures on screen are currently mock data. To review performance degradation and cleaning economics against actual unit conditions, we would like to request the following data.',
+      '',
+      `■ Target: ${client}`,
       '',
       `■ Requested data (${items.length} items)`,
       ...lines,

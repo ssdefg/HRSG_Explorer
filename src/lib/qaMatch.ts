@@ -1,11 +1,11 @@
-import type { QaAnswerId, QaPreset } from '@/data/qaPresets';
+import type { QaPresetId, QaPreset } from '@/data/qaPresets';
 
 /**
  * 시연용 질문 매칭 — 실제 AI/자연어 이해가 아니다.
  * 입력 문장을 준비된 질문 목록과 대조해 가장 가까운 항목을 고르고, 근거가 약하면 null을 돌려준다.
  */
 
-export type MatchResult = { id: QaAnswerId; via: 'exact' | 'keyword'; score: number } | null;
+export type MatchResult = { id: QaPresetId; via: 'exact' | 'keyword'; score: number } | null;
 
 /** 소문자화, 공백·문장부호 제거 */
 export function normalizeQuestion(text: string): string {

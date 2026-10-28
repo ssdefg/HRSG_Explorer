@@ -2,10 +2,10 @@ import { Card, DataTypeBadges } from '@/components/ui';
 import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber, pick } from '@/lib/format';
-import type { ParsedValues } from '@/lib/useCalculatorState';
+import type { ParsedValues } from '@/lib/calculatorModel';
 import { INPUT_DEF, type NumericInputId } from '@/data/calculatorInputs';
 
-const PINCH_INPUTS: NumericInputId[] = ['drumPressure', 'econOutletWaterTemp', 'evapOutletGasTemp'];
+const PINCH_INPUTS: NumericInputId[] = ['drumPressure', 'econOutletWaterTemp', 'evapOutletGasTemp', 'designPinch', 'designApproach'];
 
 /**
  * Pinch/Approach 분석 패널.
@@ -39,8 +39,17 @@ export function PinchApproachPanel({ values }: { values: ParsedValues }) {
                 <small>{pick(d.unit, lang)}</small>
               </span>
               <span className="kv-list__meta">
-                <DataTypeBadges types={['mock']} />
-                <span className="kv-list__hint">{c.mockEntered}</span>
+                {v === null && d.optional ? (
+                  <>
+                    <DataTypeBadges types={['unconfirmed']} />
+                    <span className="kv-list__hint">{lang === 'ko' ? '설계값 미입력 (선택 입력)' : 'Design value not entered (optional)'}</span>
+                  </>
+                ) : (
+                  <>
+                    <DataTypeBadges types={d.optional ? ['unconfirmed'] : ['mock']} />
+                    <span className="kv-list__hint">{c.mockEntered}</span>
+                  </>
+                )}
               </span>
             </li>
           );

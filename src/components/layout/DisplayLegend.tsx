@@ -3,7 +3,7 @@ import { useAppSettings } from '@/context/AppSettings';
 import { Card, DataTypeBadge, StatusBadge } from '@/components/ui';
 
 const OPERATIONAL: OperationalStatus[] = ['normal', 'caution', 'warning', 'trip'];
-const DATA_TYPES: DataType[] = ['mock', 'scenario', 'example', 'unconfirmed', 'noMeasured', 'measured', 'implemented', 'planned'];
+const DATA_TYPES: DataType[] = ['mock', 'scenario', 'example', 'unconfirmed', 'noMeasured', 'measured', 'userInput', 'implemented', 'planned'];
 
 /** 운전 상태 배지와 데이터 유형 배지의 차이를 설명하는 범례 */
 export function DisplayLegend() {

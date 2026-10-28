@@ -3,3 +3,17 @@ dist
 *.local
 .vite
 node_modules/.tmp
+
+# HRSG 제공 참고문헌 원문·목록은 커밋하지 않음
+HRSG_RAG_참고문헌/
+HRSG_RAG_참고문헌_목록.xlsx
+HRSG_RAG_*.xlsx
+HRSG_RAG_*/
+# 참고문헌 원문에서 추출한 RAG 코퍼스·인덱스도 커밋하지 않음 (scripts/build_corpus.py, build_indices.py로 재생성)
+rag/*.json
+rag/*.npy
+rag/*.pkl
+__pycache__/
+
+# API 키 등 로컬 비밀 값
+.env

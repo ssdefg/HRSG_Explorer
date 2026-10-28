@@ -1,18 +1,13 @@
 /**
- * 세정 전후 검증용 가상 시나리오.
- * 계산기 입력값과 분리해서 관리한다 — 계산기 값을 바꿔도 이 시나리오는 변하지 않는다.
+ * 세정 전후 검증용 가상 시나리오 — 세정 전후 배압·스택 온도와 시계열만 둔다.
+ * 회수 출력·세정 비용·순편익·손익분기는 계산기 입력값과 중앙 계산 엔진에서 산출한다
+ * (같은 물리량을 두 곳에서 따로 관리하지 않기 위함).
  * 실제 세정 성능이나 검증된 개선 효과가 아니다.
  */
 
 export const VALIDATION_SCENARIO = {
-  backPressure: { before: 320, after: 245 },     // mmH₂O
-  exhaustTemp: { before: 135, after: 112 },      // °C
-  /** 발전 성능 변화 가정 [MW] — 세정 전은 기준 상태(0) */
-  powerChangeMw: { before: 0, after: 1.1 },
-  /** 가상 세정 비용 [원] */
-  cleaningCostKrw: 30_000_000,
-  /** 가상 일일 순편익 [원/일] */
-  dailyNetBenefitKrw: 1_250_000,
+  backPressure: { before: 320, after: 245 }, // mmH₂O
+  exhaustTemp: { before: 135, after: 112 }, // °C
   /** 시계열 구간 [일] — 세정일(0) 기준 */
   daysBefore: 30,
   daysAfter: 60,

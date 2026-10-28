@@ -10,6 +10,8 @@ interface CardProps {
   bodyClassName?: string;
   children?: ReactNode;
   as?: 'section' | 'article' | 'div';
+  /** 화면 내 이동 대상 (scroll anchor) */
+  id?: string;
 }
 
 /** 모든 데이터 영역·입력 폼·차트를 담는 흰색 카드 */
@@ -22,10 +24,11 @@ export function Card({
   bodyClassName = '',
   children,
   as: Tag = 'section',
+  id,
 }: CardProps) {
   const hasHead = title !== undefined || badges !== undefined;
   return (
-    <Tag className={`card ${span === 2 ? 'card--span-2' : ''} ${className}`.trim()}>
+    <Tag id={id} className={`card ${span === 2 ? 'card--span-2' : ''} ${className}`.trim()}>
       {hasHead && (
         <header className="card__head">
           <div className="card__titles">

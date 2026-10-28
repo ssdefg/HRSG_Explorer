@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BP_THRESHOLDS,
   POWER_LOSS_COEFF_MW_PER_MMH2O,
-  buildCumulativeBenefit,
+  buildCumulativeNetBenefit,
   buildLossSensitivity,
   calcBreakEvenDays,
   calcChange,
@@ -80,14 +80,20 @@ test('차트 민감도 곡선은 KPI와 같은 값을 낸다', () => {
   assert.equal(pts.find((p) => p.bp === 240)?.monthlyLossMillionKrw, 0);
 });
 
-test('손익분기점 예시: 30,000,000 ÷ 1,250,000 = 24일', () => {
+test('손익분기·누적 순편익 함수 (정지일수 반영)', () => {
+  // 기존 시연 산식 30,000,000 ÷ 1,250,000 = 24일은 함수 수준에서 그대로 성립한다
   assert.equal(calcBreakEvenDays(30_000_000, 1_250_000), 24);
+  assert.equal(calcBreakEvenDays(30_000_000, 1_250_000, 2), 26);
   assert.equal(calcBreakEvenDays(30_000_000, 0), null);
-  const cum = buildCumulativeBenefit(30_000_000, 1_250_000, 60);
+  const cum = buildCumulativeNetBenefit(30_000_000, 1_250_000, 0, 60);
   assert.equal(cum.length, 61);
   assert.equal(cum[0].netMillionKrw, -30);
   assert.equal(cum[24].netMillionKrw, 0);
   assert.equal(cum[60].netMillionKrw, 45);
+  // 정지일 동안은 편익이 없다
+  const withStop = buildCumulativeNetBenefit(30_000_000, 1_250_000, 2, 10);
+  assert.equal(withStop[2].netMillionKrw, -30);
+  assert.equal(withStop[3].netMillionKrw, -28.75);
 });
 
 test('단순 회수 기간 = 비용 ÷ 월간 편익 [개월]', () => {

@@ -11,6 +11,7 @@ const GLYPH: Record<DataType, string> = {
   planned: '…',
   scenario: 'S',
   measured: '●',
+  userInput: 'U',
 };
 
 /** 데이터 신뢰성 / 구현 상태 배지 — 점선 외곽의 사각 캡슐로 운전 상태 배지와 구분 */

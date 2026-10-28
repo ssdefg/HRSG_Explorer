@@ -1,0 +1,11 @@
+torch
+transformers
+pymupdf
+FlagEmbedding
+rank-bm25
+numpy
+tqdm
+fastapi
+uvicorn
+google-genai>=2.33
+python-dotenv

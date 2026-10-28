@@ -185,3 +185,14 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
     note: { ko: '', en: '' },
   },
 ];
+
+/** 측정값 입력란의 기본 단위 (사용자가 수정 가능) */
+export const CHECKLIST_DEFAULT_UNIT: Record<string, string> = {
+  'a-gt-load': 'MW', 'a-hours-mode': 'h', 'a-exh-flow': 'kg/s', 'a-exh-temp': '°C', 'a-load-cond': '',
+  'b-type-cap': 'MW', 'b-bp-dp': 'mmH₂O', 'b-ref-cond': '', 'b-drum-p': 'bar', 'b-fw-temp': '°C',
+  'b-gas-io': '°C', 'b-pinch': '°C', 'b-approach': '°C', 'b-spec-log': '',
+  'c-pre': '', 'c-post': '', 'c-history': '', 'c-method': '', 'c-cost': '원', 'c-downtime': 'h', 'c-compare': '', 'c-maint': '',
+};
+
+/** 필수 데이터 = 우선순위 '높음' 항목 (평가 가능 여부 판단 기준 — 시연용 정의) */
+export const REQUIRED_ITEM_IDS: string[] = CHECKLIST_ITEMS.filter((i) => i.priority === 'high').map((i) => i.id);

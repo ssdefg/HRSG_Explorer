@@ -3,14 +3,8 @@ import type { DataType, Lang, OperationalStatus } from '@/types';
 /** UI 공통 문자열 사전. 도메인 데이터의 번역은 각 데이터 파일의 Localized 필드에 둔다. */
 const ko = {
   appName: 'HRSG Maintenance Decision Support Platform',
-  appNameShort: 'HRSG Maintenance DSP',
   subtitle: '복합화력 발전소 엔지니어를 위한 AI 질의응답 + 성능·경제성 계산기',
   branding: 'HRSG Reference App (폐열회수단 × 클라우드라 협력 프로젝트)',
-  mockBadge: 'UI PROTOTYPE · MOCK DATA ONLY',
-  mockNotice: '기업 데이터 수령 전 — 현재 표시되는 수치와 분석 결과는 시연용 가상 데이터입니다.',
-  systemStatus: '시스템 상태',
-  activeAlarms: '활성 경보',
-  lastUpdated: '기준 시각',
   language: '언어',
   theme: '테마',
   themeLight: '라이트',
@@ -36,6 +30,7 @@ const ko = {
     planned: '연동 예정',
     scenario: '가상 시나리오',
     measured: '실측 데이터',
+    userInput: '사용자 입력',
   } satisfies Record<DataType, string>,
 };
 
@@ -43,14 +38,8 @@ export type Strings = typeof ko;
 
 const en: Strings = {
   appName: 'HRSG Maintenance Decision Support Platform',
-  appNameShort: 'HRSG Maintenance DSP',
   subtitle: 'AI Q&A + performance & economics calculator for combined-cycle plant engineers',
   branding: 'HRSG Reference App (폐열회수단 × 클라우드라 joint project)',
-  mockBadge: 'UI PROTOTYPE · MOCK DATA ONLY',
-  mockNotice: 'Before receiving partner data — all figures and analysis shown are mock data for demonstration.',
-  systemStatus: 'System status',
-  activeAlarms: 'Active alarms',
-  lastUpdated: 'As of',
   language: 'Language',
   theme: 'Theme',
   themeLight: 'Light',
@@ -76,6 +65,7 @@ const en: Strings = {
     planned: 'Planned',
     scenario: 'Mock scenario',
     measured: 'Measured data',
+    userInput: 'User input',
   },
 };
 

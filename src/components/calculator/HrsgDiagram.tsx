@@ -4,7 +4,7 @@ import { Card, DataTypeBadges } from '@/components/ui';
 import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber } from '@/lib/format';
-import type { ParsedValues } from '@/lib/useCalculatorState';
+import type { ParsedValues } from '@/lib/calculatorModel';
 import type { NumericInputId } from '@/data/calculatorInputs';
 import { INPUT_DEF } from '@/data/calculatorInputs';
 
@@ -124,6 +124,9 @@ export function HrsgDiagram({ values }: { values: ParsedValues }) {
             <marker id="arrow-water" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
               <path d="M0 0L10 5L0 10z" className="hrsg__arrowhead--water" />
             </marker>
+            <marker id="arrow-steam" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0L10 5L0 10z" className="hrsg__arrowhead--steam" />
+            </marker>
           </defs>
 
           {/* 덕트 외곽 */}
@@ -176,31 +179,42 @@ export function HrsgDiagram({ values }: { values: ParsedValues }) {
             <text x="250" y="256" textAnchor="middle" className="hrsg__label hrsg__label--small">
               {c.gasFlow} →
             </text>
-            <line x1="515" y1="60" x2="515" y2="12" markerEnd="url(#arrow-water)" className="hrsg__stack-arrow" />
+            <line x1="515" y1="60" x2="515" y2="12" markerEnd="url(#arrow-gas)" className="hrsg__stack-arrow" />
           </g>
 
-          {/* Steam/Water Flow — 급수 → ECO → Drum → SH → 증기터빈 */}
+          {/* 급수 흐름(파란 점선): 급수 → ECO → Drum · 증기 흐름(주황 점선): Drum → SH → 증기터빈 */}
           <g {...bind('flow')}>
             <path
               d="M470 30 H415 V98 M375 98 V52 H310 M240 52 H165 V98 M135 98 V24 H24"
               className="hrsg__flow-hit"
             />
-            <path
-              d="M470 30 H415 V96"
-              className="hrsg__flow"
-              markerEnd="url(#arrow-water)"
-            />
-            <path d="M375 96 V52 H312" className="hrsg__flow" markerEnd="url(#arrow-water)" />
-            <path d="M238 52 H165 V96" className="hrsg__flow" markerEnd="url(#arrow-water)" />
-            <path d="M135 96 V24 H28" className="hrsg__flow" markerEnd="url(#arrow-water)" />
+            <path d="M470 30 H415 V96" className="hrsg__flow hrsg__flow--water" markerEnd="url(#arrow-water)" />
+            <path d="M375 96 V52 H312" className="hrsg__flow hrsg__flow--water" markerEnd="url(#arrow-water)" />
+            <path d="M238 52 H165 V96" className="hrsg__flow hrsg__flow--steam" markerEnd="url(#arrow-steam)" />
+            <path d="M135 96 V24 H28" className="hrsg__flow hrsg__flow--steam" markerEnd="url(#arrow-steam)" />
             <text x="444" y="24" textAnchor="middle" className="hrsg__label hrsg__label--small hrsg__label--flow">
               Feedwater
             </text>
-            <text x="64" y="18" textAnchor="middle" className="hrsg__label hrsg__label--small hrsg__label--flow">
+            <text x="64" y="18" textAnchor="middle" className="hrsg__label hrsg__label--small hrsg__label--steam">
               Steam → ST
             </text>
           </g>
         </svg>
+
+        <div className="hrsg__legend" aria-label={c.diagramLegend}>
+          <span className="hrsg__legend-item">
+            <i className="hrsg__key hrsg__key--gas" aria-hidden="true" />
+            {c.legendGas}
+          </span>
+          <span className="hrsg__legend-item">
+            <i className="hrsg__key hrsg__key--water" aria-hidden="true" />
+            {c.legendWater}
+          </span>
+          <span className="hrsg__legend-item">
+            <i className="hrsg__key hrsg__key--steam" aria-hidden="true" />
+            {c.legendSteam}
+          </span>
+        </div>
 
         <div className="hrsg__parts" role="group" aria-label={c.diagramTitle}>
           {ORDER.map((id) => (

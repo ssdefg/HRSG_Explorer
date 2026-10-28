@@ -26,8 +26,8 @@
 
 .calc-layout__side {
   position: sticky;
-  top: 112px; /* below sticky header */
-  max-height: calc(100vh - 128px);
+  top: calc(var(--utilbar-h) + 12px); /* below sticky utility header */
+  max-height: calc(100vh - var(--utilbar-h) - 24px);
   overflow-y: auto;
   border-radius: var(--radius);
 }

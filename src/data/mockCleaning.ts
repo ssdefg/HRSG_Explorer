@@ -9,9 +9,12 @@ export interface CleaningMethod {
   monthlyBenefitKrw: number;
 }
 
-/** 시연용 세정 방식 비교 데이터. 값을 임의로 실제 데이터처럼 바꾸지 않는다. */
+/**
+ * 시연용 세정 공법 비교 데이터 (가상 데이터). 공법명은 일반 명칭만 쓰며 업체명·상표명을 쓰지 않는다.
+ * 값을 실제 견적·검증된 성능처럼 표현하지 않는다.
+ */
 export const MOCK_CLEANING_METHODS: CleaningMethod[] = [
   { id: 'dryIce', label: { ko: '드라이아이스 세정', en: 'Dry-ice blasting' }, costKrw: 30_000_000, monthlyBenefitKrw: 38_000_000 },
   { id: 'highPressureWater', label: { ko: '고압수 세정', en: 'High-pressure water' }, costKrw: 18_000_000, monthlyBenefitKrw: 24_000_000 },
-  { id: 'chemical', label: { ko: '약품 세정', en: 'Chemical cleaning' }, costKrw: 25_000_000, monthlyBenefitKrw: 30_000_000 },
+  { id: 'chemical', label: { ko: '화학(약품) 세정', en: 'Chemical cleaning' }, costKrw: 25_000_000, monthlyBenefitKrw: 30_000_000 },
 ];

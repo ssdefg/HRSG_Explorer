@@ -16,7 +16,7 @@ import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber } from '@/lib/format';
 import { BP_THRESHOLDS, buildLossSensitivity, classifyBackpressure } from '@/lib/calc';
-import type { CalculatorState } from '@/lib/useCalculatorState';
+import type { CalculatorState } from '@/context/Workspace';
 import { LEVEL_STATUS, levelLabel } from './level';
 
 const AXIS_TICK = { fill: 'var(--c-ink-3)', fontSize: 11 };
@@ -34,11 +34,17 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
   const { lang } = useAppSettings();
   const c = useCalcText();
   const { currentBp, referenceBp, operatingHours, smp, exhaustTemp, capacityMw, loadPct } = state.values;
-  const { monthlyLossKrw, outputMw, lossSharePct, powerLossMw } = state.result;
+  const m = state.metrics;
+  const monthlyLossKrw = m.monthlyLossKrw.value;
+  const powerLossMw = m.powerLossMw.value;
+  const outputMw = state.bp.outputMw;
+  const lossSharePct = m.powerLossMw.status === 'ok' ? state.bp.lossSharePct : null;
+  // 사용자 입력 모드: 배압→손실 계수(0.015)가 검증된 모델이 아니므로 곡선을 그리지 않는다
+  const modelBlocked = state.mode === 'user';
 
   const { from, to, step } = chartRange(currentBp, referenceBp);
   const ticks = Array.from({ length: Math.floor((to - from) / 50) + 1 }, (_, i) => from + i * 50);
-  const data = buildLossSensitivity(referenceBp, operatingHours, smp, from, to, step);
+  const data = modelBlocked ? [] : buildLossSensitivity(referenceBp, operatingHours, smp, from, to, step);
   const currentLossM = monthlyLossKrw === null ? null : monthlyLossKrw / 1e6;
   const n = (x: number | null, d = 0) => (x === null ? '—' : formatNumber(x, lang, d));
 
@@ -107,7 +113,7 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
       </dl>
 
       {data.length === 0 ? (
-        <p className="chart-empty">{c.chartEmpty}</p>
+        <p className="chart-empty">{modelBlocked ? c.chartModel : c.chartEmpty}</p>
       ) : (
         <>
           <div className="chart-box" role="img" aria-label={`${c.chartTitle} — ${c.chartSubtitle}`}>

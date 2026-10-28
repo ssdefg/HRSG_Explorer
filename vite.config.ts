@@ -7,7 +7,12 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
-  server: { port: 5173, open: false },
+  server: {
+    port: 5173,
+    open: false,
+    // 참고문헌 RAG API (python -m uvicorn server.app:app --port 8000)
+    proxy: { '/api': 'http://127.0.0.1:8000' },
+  },
   build: {
     rollupOptions: {
       output: {

@@ -3,7 +3,7 @@
 export type Lang = 'ko' | 'en';
 export type ThemeMode = 'light' | 'dark';
 
-export type TabId = 'qa' | 'calculator' | 'checklist' | 'validation';
+export type TabId = 'dashboard' | 'calculator' | 'checklist' | 'validation';
 
 /** 실제 운전 상태 (설비 상태). 데이터 신뢰성과 별개다. */
 export type OperationalStatus = 'normal' | 'caution' | 'warning' | 'trip';
@@ -17,13 +17,11 @@ export type DataType =
   | 'implemented'   // 기능 구현
   | 'planned'       // 연동 예정
   | 'scenario'      // 가상 시나리오
-  | 'measured';     // 실측 데이터 (사용자 입력 — 검증 전)
+  | 'measured'      // 실측 데이터 (사용자 입력 — 검증 전)
+  | 'userInput';    // 사용자 입력 (출처 미확인 — 실측 여부 모름)
 
 /** 데이터 요청 항목의 수령 상태. 검토 여부(체크박스)와 별개로 관리한다. */
 export type ReceiptStatus = 'noMeasured' | 'requestNeeded' | 'received' | 'needsVerification';
-
-/** 팀 내부 검토 상태 */
-export type ReviewStatus = 'todo' | 'inProgress' | 'done' | 'issue';
 
 export type Localized = Record<Lang, string>;
 
@@ -46,16 +44,4 @@ export interface Kpi {
   dataTypes: DataType[];
 }
 
-export interface UnitStatus {
-  unitId: string;
-  label: Localized;
-  status: OperationalStatus;
-}
-
-export interface SystemStatusSummary {
-  units: UnitStatus[];
-  activeAlarms: number;
-  lastUpdated: string; // ISO 문자열 (가상)
-  dataTypes: DataType[];
-}
 

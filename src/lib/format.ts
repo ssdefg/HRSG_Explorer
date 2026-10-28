@@ -16,17 +16,6 @@ export function formatSignedPct(value: number, lang: Lang, digits = 1): string {
   return `${sign}${formatNumber(Math.abs(value), lang, digits)}%`;
 }
 
-export function formatDateTime(iso: string, lang: Lang): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(LOCALE[lang], {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(d);
-}
 
 export function pick(text: string | Localized, lang: Lang): string {
   return typeof text === 'string' ? text : text[lang];

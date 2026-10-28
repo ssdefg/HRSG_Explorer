@@ -72,12 +72,17 @@ const ko = {
   lossShare: '출력 대비 손실 비율',
   exhaustTemp: '배기가스 출구 온도',
   chartEmpty: '입력값 오류로 차트를 표시할 수 없습니다.',
+  chartModel: '모델 미연동 — 사용자 입력 모드에서는 검증되지 않은 배압→손실 계수로 곡선을 그리지 않습니다. DEMO 시나리오 모드에서 확인하세요.',
   million: '백만원',
   tableView: '표로 보기',
 
   // diagram
   diagramTitle: 'HRSG 개념도',
-  diagramNotice: '개념도 · 실제 설비 도면 아님',
+  diagramNotice: 'HRSG 개념도 · 시연용 · 실제 설비 도면 아님',
+  diagramLegend: '흐름 범례',
+  legendGas: '가스 흐름',
+  legendWater: '급수 흐름',
+  legendSteam: '증기 흐름',
   diagramHint: '구성요소에 마우스를 올리거나 클릭하면 설명이 표시됩니다.',
   gasFlow: '배기가스 흐름',
   steamWater: 'Steam/Water Flow',
@@ -86,7 +91,7 @@ const ko = {
   // pinch
   pinchTitle: 'Pinch Point · Approach Point',
   pinchSubtitle: '분석 입력값 확인',
-  pinchWaiting: '분석 대기 — 실제 설계 데이터 및 계산 기준 필요',
+  pinchWaiting: '분석 대기 — 설계 데이터 및 물성 기준 필요',
   pinchWaitingDesc:
     '계산 기준(포화온도 산정 방법, 설계 Pinch/Approach 기준값)이 확정되지 않아 수치를 산출하지 않습니다. 아래 입력값은 가상 데이터입니다.',
   pinchDefsTitle: '일반 정의 (참고용 · 계산하지 않음)',
@@ -200,11 +205,16 @@ const en: CalcStrings = {
   lossShare: 'Loss share of output',
   exhaustTemp: 'Stack gas outlet temp.',
   chartEmpty: 'Chart unavailable — invalid inputs.',
+  chartModel: 'Model not connected — user-input mode does not draw the curve with the unverified BP→loss coefficient. View it in DEMO scenario mode.',
   million: 'KRW M',
   tableView: 'Show as table',
 
   diagramTitle: 'HRSG concept diagram',
-  diagramNotice: 'Concept diagram · not an actual equipment drawing',
+  diagramNotice: 'HRSG concept diagram · demo · not an actual drawing',
+  diagramLegend: 'Flow legend',
+  legendGas: 'Gas flow',
+  legendWater: 'Feedwater flow',
+  legendSteam: 'Steam flow',
   diagramHint: 'Hover or click a component to see its description.',
   gasFlow: 'Exhaust gas flow',
   steamWater: 'Steam/Water Flow',
@@ -212,7 +222,7 @@ const en: CalcStrings = {
 
   pinchTitle: 'Pinch Point · Approach Point',
   pinchSubtitle: 'Analysis inputs',
-  pinchWaiting: 'Analysis pending — actual design data and calculation basis required',
+  pinchWaiting: 'Analysis pending — design data and property basis required',
   pinchWaitingDesc:
     'The calculation basis (saturation temperature method, design pinch/approach criteria) is not confirmed, so no values are computed. Inputs below are mock data.',
   pinchDefsTitle: 'General definitions (reference only · not computed)',

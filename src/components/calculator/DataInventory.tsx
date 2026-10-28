@@ -4,9 +4,12 @@ import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber, pick } from '@/lib/format';
 import { BP_THRESHOLDS, POWER_LOSS_COEFF_MW_PER_MMH2O } from '@/lib/calc';
-import type { CalculatorState } from '@/lib/useCalculatorState';
+import type { CalculatorState } from '@/context/Workspace';
+import type { MetricId } from '@/lib/calculatorModel';
+import { METRIC_STATUS_TEXT } from './metricText';
 import { HRSG_CLASSES, NUMERIC_INPUTS } from '@/data/calculatorInputs';
 import { MOCK_CLEANING_METHODS } from '@/data/mockCleaning';
+import { SECTION_IDS } from '@/data/tabs';
 
 interface Row {
   key: string;
@@ -23,7 +26,7 @@ interface Row {
 export function DataInventory({ state }: { state: CalculatorState }) {
   const { lang } = useAppSettings();
   const c = useCalcText();
-  const { values, result, hrsgClass } = state;
+  const { values, metrics, hrsgClass } = state;
   const n = (v: number | null, d = 0) => (v === null ? '—' : formatNumber(v, lang, d));
   const won = lang === 'ko' ? '원' : 'KRW';
 
@@ -34,7 +37,7 @@ export function DataInventory({ state }: { state: CalculatorState }) {
         {
           key: 'class',
           name: c.hrsgClass,
-          value: HRSG_CLASSES.find((x) => x.value === hrsgClass)?.label ?? '—',
+          value: `${HRSG_CLASSES.find((x) => x.value === hrsgClass)?.label ?? '—'} · ${state.model}`,
           unit: '—',
           types: ['mock'],
           provisional: true,
@@ -45,7 +48,7 @@ export function DataInventory({ state }: { state: CalculatorState }) {
           name: d.label[lang],
           value: n(values[d.id], d.digits),
           unit: pick(d.unit, lang),
-          types: d.dataTypes,
+          types: state.mode === 'user' && state.edited[d.id] ? ['userInput'] : d.dataTypes,
           provisional: true,
           replace: d.needsReal ? d.missingType : null,
         })),
@@ -109,15 +112,32 @@ export function DataInventory({ state }: { state: CalculatorState }) {
     {
       title: c.invOutputs,
       rows: [
-        { key: 'delta', name: c.stepDelta, value: n(result.deltaBp), unit: 'mmH₂O', types: ['example'], provisional: true, replace: 'model' },
-        { key: 'power', name: c.stepPower, value: n(result.powerLossMw, 2), unit: 'MW', types: ['example'], provisional: true, replace: 'model' },
-        { key: 'monthly', name: c.stepMonthly, value: n(result.monthlyLossKrw), unit: won, types: ['example'], provisional: true, replace: 'model' },
+        ...(
+          [
+            ['deltaBp', c.stepDelta, 'mmH₂O', 0],
+            ['powerLossMw', c.stepPower, 'MW', 2],
+            ['monthlyLossKrw', c.stepMonthly, won, 0],
+            ['additionalRevenueKrw', lang === 'ko' ? '추가 발전 매출' : 'Additional revenue', won, 0],
+            ['shutdownLossKrw', lang === 'ko' ? '정지 손실' : 'Shutdown loss', won, 0],
+            ['netBenefitKrw', lang === 'ko' ? '세정 순편익 (첫 1개월)' : 'Net benefit (first month)', won, 0],
+            ['paybackMonths', lang === 'ko' ? '단순 회수 기간' : 'Simple payback', lang === 'ko' ? '개월' : 'months', 2],
+            ['breakEvenDays', lang === 'ko' ? '손익분기' : 'Break-even', lang === 'ko' ? '일' : 'd', 1],
+          ] as [MetricId, string, string, number][]
+        ).map<Row>(([id, name, unit, digits]) => ({
+          key: id,
+          name,
+          value: metrics[id].status === 'ok' ? n(metrics[id].value, digits) : `— (${METRIC_STATUS_TEXT[lang][metrics[id].status as 'invalid' | 'model']})`,
+          unit,
+          types: metrics[id].status === 'model' ? ['planned'] : ['example'],
+          provisional: true,
+          replace: 'model',
+        })),
       ],
     },
   ];
 
   return (
-    <Card span={2} title={c.invTitle} subtitle={c.invSubtitle} badges={<DataTypeBadges types={['mock', 'example']} />}>
+    <Card id={SECTION_IDS.inventory} span={2} title={c.invTitle} subtitle={c.invSubtitle} badges={<DataTypeBadges types={['mock', 'example']} />}>
       <div className="table-wrap">
         <table className="data-table data-table--inventory">
           <thead>

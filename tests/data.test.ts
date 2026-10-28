@@ -7,6 +7,7 @@ import { QA_PRESETS } from '@/data/qaPresets';
 import { matchQuestion } from '@/lib/qaMatch';
 import { buildRequestEmail } from '@/lib/emailDraft';
 import { BP_THRESHOLDS, POWER_LOSS_COEFF_MW_PER_MMH2O } from '@/lib/calc';
+import { INPUT_DEF } from '@/data/calculatorInputs';
 
 test('세정 방식 가상 비용·월간 편익이 명세와 같다', () => {
   const byId = Object.fromEntries(MOCK_CLEANING_METHODS.map((m) => [m.id, [m.costKrw, m.monthlyBenefitKrw]]));
@@ -21,9 +22,10 @@ test('세정 전후 가상 시나리오가 명세와 같다', () => {
   const s = VALIDATION_SCENARIO;
   assert.deepEqual(s.backPressure, { before: 320, after: 245 });
   assert.deepEqual(s.exhaustTemp, { before: 135, after: 112 });
-  assert.equal(s.powerChangeMw.after, 1.1);
-  assert.equal(s.cleaningCostKrw, 30_000_000);
-  assert.equal(s.dailyNetBenefitKrw, 1_250_000);
+  // 회수 출력·세정 비용은 시나리오가 아니라 계산기 입력(단일 원본)으로 이동했다
+  assert.equal(INPUT_DEF.recoveredPowerMw.defaultValue, 1.1);
+  assert.equal(INPUT_DEF.cleaningCostKrw.defaultValue, 30_000_000);
+  assert.ok(!('dailyNetBenefitKrw' in s) && !('cleaningCostKrw' in s));
 });
 
 test('시계열: 세정 전 30일 + 후 60일, 세정일(0) 비움, 결정적', () => {
@@ -42,13 +44,32 @@ test('체크리스트 22개 항목 (A 5 · B 9 · C 8), id 중복 없음', () =>
 });
 
 test('질문 매칭: 추천 질문은 정확히, 무관한 질문은 매칭하지 않음', () => {
-  assert.equal(QA_PRESETS.length, 5);
+  assert.equal(QA_PRESETS.length, 14);
+  assert.deepEqual(
+    ['thermo', 'economics', 'pinch', 'data'].map((c) => QA_PRESETS.filter((p) => p.category === c).length),
+    [4, 3, 3, 4],
+  );
   for (const p of QA_PRESETS) {
     assert.equal(matchQuestion(p.question.ko, QA_PRESETS)?.id, p.id);
     assert.equal(matchQuestion(p.question.en, QA_PRESETS)?.id, p.id);
   }
   assert.equal(matchQuestion('배압이 오르면 출력이 떨어지나요?', QA_PRESETS)?.id, 'bpImpact');
-  assert.equal(matchQuestion('pinch point가 뭐야', QA_PRESETS)?.id, 'pinchApproach');
+  const cases: [string, string][] = [
+    ['pinch point가 뭐야', 'pinchDef'],
+    ['어프로치 포인트 정의', 'approachDef'],
+    ['핀치 검토에 필요한 설계 데이터', 'pinchData'],
+    ['차압이 오르는 원인', 'dpCause'],
+    ['스택 온도가 높으면 무슨 의미야', 'stackTemp'],
+    ['파울링이 성능에 주는 영향', 'foulingImpact'],
+    ['드라이아이스랑 고압수 차이', 'methodCompare'],
+    ['공법별 비용 비교 기준', 'costBasis'],
+    ['세정 판단에 필요한 경제성 데이터', 'econData'],
+    ['세정 필요성 판단 필수 데이터', 'cleaningNeedData'],
+    ['체크리스트 어떻게 활용해', 'checklistUse'],
+    ['부족한 데이터 확인', 'missingData'],
+    ['세정 전후 효과 검증 자료', 'validationData'],
+  ];
+  for (const [q, id] of cases) assert.equal(matchQuestion(q, QA_PRESETS)?.id, id, q);
   for (const q of ['오늘 점심 메뉴 추천해줘', '배압', '', 'What is the weather?']) {
     assert.equal(matchQuestion(q, QA_PRESETS), null, q);
   }
