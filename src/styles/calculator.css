@@ -9,9 +9,9 @@
   gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--c-line);
-  border-left: 3px solid var(--c-caution);
+  border-left: 2px solid var(--c-insight-line);
+  background: var(--c-insight-bg);
   border-radius: var(--radius);
-  background: var(--c-surface);
   font-size: var(--fs-sm);
   color: var(--c-ink-2);
 }
@@ -172,9 +172,12 @@
 .seg--light .seg__btn:hover {
   color: var(--c-ink);
 }
+/* 선택 칸: 단색 채우기 대신 한 단계 밝은 칸 + 얇은 외곽선 + 굵기로 구분 */
 .seg--light .seg__btn[aria-pressed='true'] {
-  background: var(--c-ink);
-  color: var(--c-surface);
+  background: var(--c-control-active);
+  color: var(--c-ink);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--c-line-strong), var(--shadow-card);
 }
 
 .btn {
@@ -184,6 +187,7 @@
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .btn--ghost {
@@ -514,9 +518,9 @@
   align-items: center;
   height: 20px;
   padding: 0 7px;
-  border: 1px dashed var(--c-accent);
+  border: 1px dashed var(--c-data-line);
   border-radius: var(--radius-sm);
-  color: var(--c-accent-ink);
+  color: var(--c-data-ink);
   font-size: var(--fs-xs);
   font-weight: 600;
   white-space: nowrap;

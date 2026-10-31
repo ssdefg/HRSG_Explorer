@@ -3,13 +3,14 @@
    ========================================================================== */
 
 /* ---- Shared controls ---------------------------------------------------- */
+/* 주요 행동 — 면 채우기 없이 1px accent 외곽선 + accent 글자, hover 시 옅은 tint */
 .btn--primary {
-  border: 1px solid var(--c-cta-bg);
+  border: 1px solid var(--c-cta-line);
   background: var(--c-cta-bg);
   color: var(--c-cta-ink);
 }
 .btn--primary:hover:not(:disabled) {
-  filter: brightness(0.95);
+  background: var(--c-cta-hover-bg);
 }
 .btn:disabled {
   opacity: 0.45;
@@ -44,12 +45,13 @@
   font-size: var(--fs-xs);
 }
 
-/* AI 미연동 배지 — 데이터 유형 배지와 다른 강조 외곽선 */
+/* AI 미연동(시연용 답변) 배지 — DEMO/MOCK 라벨과 같은 insight 계열 실선 외곽선.
+   브랜드 오렌지(실제 AI 답변 강조선)와 구분되어 예시 답변이 실제 AI처럼 보이지 않는다. */
 .badge--demo-ai {
   height: 22px;
-  border: 1px solid var(--c-accent);
-  color: var(--c-accent-ink);
-  background: var(--c-accent-soft);
+  border: 1px solid var(--c-insight-line);
+  color: var(--c-insight-ink);
+  background: var(--c-insight-bg);
   border-radius: var(--radius-sm);
   font-weight: 700;
 }
@@ -72,8 +74,9 @@
 .badge--receipt-received { color: var(--c-data-impl-ink); background: var(--c-data-impl-bg); }
 .badge--receipt-needsVerification { color: var(--c-caution-ink); background: var(--c-caution-bg); }
 
+/* AI 미연동 안내 — 다른 안내와 같은 insight 선 (오렌지는 실제 AI 답변 강조선 전용) */
 .page-notice--ai {
-  border-left-color: var(--c-accent);
+  border-left-color: var(--c-insight-line);
 }
 
 /* ---- AI Q&A ------------------------------------------------------------- */

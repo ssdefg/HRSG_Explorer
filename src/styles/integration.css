@@ -6,8 +6,11 @@
 /* ---- Shared helpers ------------------------------------------------------ */
 .btn--danger {
   border: 1px solid var(--c-warning);
-  background: var(--c-warning-bg);
+  background: transparent;
   color: var(--c-warning-ink);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--c-warning-bg);
 }
 
 .metric-tag {
@@ -75,7 +78,7 @@ textarea.text-input {
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: rgba(15, 20, 28, 0.5);
+  background: var(--c-backdrop);
   display: grid;
   place-items: start center;
   padding: 6vh var(--sp-4) var(--sp-4);
