@@ -115,18 +115,21 @@ export function BackpressureGauge({ state }: { state: CalculatorState }) {
       <p className="note">{c.gaugeThresholds}</p>
       <p className="note note--warn">{c.gaugeDisclaimer}</p>
 
-      <div className="needs">
-        <p className="needs__title">{c.gaugeNeedsData}</p>
-        <ul className="needs__list">
-          {c.gaugeNeedsList.map((x) => (
-            <li key={x}>{x}</li>
-          ))}
-        </ul>
-        <p className="needs__context">
-          {c.gaugeContext}: {lang === 'ko' ? '부하율' : 'Load'} <span className="num">{n(loadPct)}%</span> ·{' '}
-          {c.exhaustTemp} <span className="num">{n(exhaustTemp)}°C</span> <DataTypeBadges types={['mock']} />
-        </p>
-      </div>
+      {/* 판단에 추가로 필요한 데이터 — 기본 접힘 (임계값 안내·면책 문구는 위에 그대로 표시) */}
+      <details className="fold">
+        <summary className="fold__summary">{c.gaugeNeedsData}</summary>
+        <div className="needs">
+          <ul className="needs__list">
+            {c.gaugeNeedsList.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+          <p className="needs__context">
+            {c.gaugeContext}: {lang === 'ko' ? '부하율' : 'Load'} <span className="num">{n(loadPct)}%</span> ·{' '}
+            {c.exhaustTemp} <span className="num">{n(exhaustTemp)}°C</span> <DataTypeBadges types={['mock']} />
+          </p>
+        </div>
+      </details>
     </Card>
   );
 }

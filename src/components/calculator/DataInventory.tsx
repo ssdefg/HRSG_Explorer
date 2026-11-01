@@ -136,56 +136,63 @@ export function DataInventory({ state }: { state: CalculatorState }) {
     },
   ];
 
+  const rowCount = groups.reduce((sum, g) => sum + g.rows.length, 0);
+  const showTable = lang === 'ko' ? `전체 표 보기 (${rowCount}개 항목)` : `Show full table (${rowCount} items)`;
+
   return (
     <Card id={SECTION_IDS.inventory} span={2} title={c.invTitle} subtitle={c.invSubtitle} badges={<DataTypeBadges types={['mock', 'example']} />}>
-      <div className="table-wrap">
-        <table className="data-table data-table--inventory">
-          <thead>
-            <tr>
-              <th scope="col">{c.invItem}</th>
-              <th scope="col" className="num-col">
-                {c.invValue}
-              </th>
-              <th scope="col">{c.invUnit}</th>
-              <th scope="col">{c.invType}</th>
-              <th scope="col">{c.invAssumption}</th>
-              <th scope="col">{c.invReplace}</th>
-            </tr>
-          </thead>
-          {groups.map((g) => (
-            <tbody key={g.title}>
-              <tr className="data-table__group">
-                <th scope="colgroup" colSpan={6}>
-                  {g.title}
+      {/* 전체 값·가정 목록 — 기본 접힘 */}
+      <details className="fold">
+        <summary className="fold__summary">{showTable}</summary>
+        <div className="table-wrap">
+          <table className="data-table data-table--inventory">
+            <thead>
+              <tr>
+                <th scope="col">{c.invItem}</th>
+                <th scope="col" className="num-col">
+                  {c.invValue}
                 </th>
+                <th scope="col">{c.invUnit}</th>
+                <th scope="col">{c.invType}</th>
+                <th scope="col">{c.invAssumption}</th>
+                <th scope="col">{c.invReplace}</th>
               </tr>
-              {g.rows.map((r) => (
-                <tr key={r.key}>
-                  <th scope="row">{r.name}</th>
-                  <td className="num-col num">{r.value}</td>
-                  <td className="data-table__unit">{r.unit}</td>
-                  <td>
-                    <span className="badge-row">
-                      <DataTypeBadges types={r.types} />
-                    </span>
-                  </td>
-                  <td>{r.provisional ? c.yes : c.no}</td>
-                  <td>
-                    {r.replace === null ? (
-                      c.no
-                    ) : (
-                      <span className="badge-row">
-                        <span className="replace-flag">{r.replace === 'model' ? c.modelCheck : c.required}</span>
-                        {r.replace !== 'model' && <DataTypeBadge type={r.replace} />}
-                      </span>
-                    )}
-                  </td>
+            </thead>
+            {groups.map((g) => (
+              <tbody key={g.title}>
+                <tr className="data-table__group">
+                  <th scope="colgroup" colSpan={6}>
+                    {g.title}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          ))}
-        </table>
-      </div>
+                {g.rows.map((r) => (
+                  <tr key={r.key}>
+                    <th scope="row">{r.name}</th>
+                    <td className="num-col num">{r.value}</td>
+                    <td className="data-table__unit">{r.unit}</td>
+                    <td>
+                      <span className="badge-row">
+                        <DataTypeBadges types={r.types} />
+                      </span>
+                    </td>
+                    <td>{r.provisional ? c.yes : c.no}</td>
+                    <td>
+                      {r.replace === null ? (
+                        c.no
+                      ) : (
+                        <span className="badge-row">
+                          <span className="replace-flag">{r.replace === 'model' ? c.modelCheck : c.required}</span>
+                          {r.replace !== 'model' && <DataTypeBadge type={r.replace} />}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
+          </table>
+        </div>
+      </details>
     </Card>
   );
 }

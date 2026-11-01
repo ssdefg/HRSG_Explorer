@@ -23,6 +23,7 @@ const TXT = {
     months: '개월',
     days: '일',
     notPayback: '회수 불가',
+    basisTitle: '단계별 산식 및 계산 근거',
     separate:
       '배압 기반 손실 추정치와 회수 출력은 서로 다른 값입니다. 회수 출력은 입력 가정값이며 배압 손실 계산 결과를 그대로 쓰지 않습니다.',
     noDouble:
@@ -42,6 +43,7 @@ const TXT = {
     months: 'months',
     days: 'd',
     notPayback: 'No payback',
+    basisTitle: 'Step-by-step formulas & calculation basis',
     separate:
       'BP-based loss estimate and recovered output are different values. Recovered output is an input assumption, not the BP loss result.',
     noDouble:
@@ -132,6 +134,7 @@ export function CalculationResult({ state }: { state: CalculatorState }) {
     },
   ];
 
+  // 결과 값 목록 (라벨 + 값) — 대입 산식은 아래 접힘 영역(renderFormulas)에 둔다
   const renderRows = (rows: Row[]) => (
     <ol className="calc-steps">
       {rows.map((row) => {
@@ -139,7 +142,6 @@ export function CalculationResult({ state }: { state: CalculatorState }) {
         return (
           <li key={row.id} className="calc-steps__row" data-metric={row.id}>
             <span className="calc-steps__label">{row.label}</span>
-            <code className="calc-steps__formula">{row.formula}</code>
             <span className="calc-steps__value">
               {metric.status === 'ok' && metric.value !== null ? (
                 <>
@@ -163,6 +165,17 @@ export function CalculationResult({ state }: { state: CalculatorState }) {
     </ol>
   );
 
+  const renderFormulas = (rows: Row[]) => (
+    <ol className="calc-steps calc-steps--formulas">
+      {rows.map((row) => (
+        <li key={row.id} className="calc-steps__row">
+          <span className="calc-steps__label">{row.label}</span>
+          <code className="calc-steps__formula">{row.formula}</code>
+        </li>
+      ))}
+    </ol>
+  );
+
   return (
     <Card
       id={SECTION_IDS.economics}
@@ -172,12 +185,23 @@ export function CalculationResult({ state }: { state: CalculatorState }) {
     >
       <h4 className="calc-subhead">{x.bpTitle}</h4>
       {renderRows(bpRows)}
-      <p className="note">{c.coeffNote}</p>
 
       <h4 className="calc-subhead">{x.ecoTitle}</h4>
       {renderRows(ecoRows)}
-      <p className="note">{x.separate}</p>
-      <p className="note">{x.noDouble}</p>
+
+      {/* 계산 근거 — 대입 산식과 유의사항 (기본 접힘) */}
+      <details className="fold">
+        <summary className="fold__summary">{x.basisTitle}</summary>
+        <div className="fold__body">
+          <h4 className="calc-subhead">{x.bpTitle}</h4>
+          {renderFormulas(bpRows)}
+          <p className="note">{c.coeffNote}</p>
+          <h4 className="calc-subhead">{x.ecoTitle}</h4>
+          {renderFormulas(ecoRows)}
+          <p className="note">{x.separate}</p>
+          <p className="note">{x.noDouble}</p>
+        </div>
+      </details>
 
       <p className="note note--example">
         <DataTypeBadges types={['example']} /> {c.exampleNote}

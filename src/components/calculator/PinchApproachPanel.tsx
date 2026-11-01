@@ -56,20 +56,25 @@ export function PinchApproachPanel({ values }: { values: ParsedValues }) {
         })}
       </ul>
 
-      <div className="defs">
-        <p className="defs__title">{c.pinchDefsTitle}</p>
-        <p className="defs__item">{c.pinchDef}</p>
-        <p className="defs__item">{c.approachDef}</p>
-      </div>
+      {/* 정의·필요 데이터 설명 — 기본 접힘 (기존 제목을 접기 라벨로 사용) */}
+      <details className="fold">
+        <summary className="fold__summary">{c.pinchDefsTitle}</summary>
+        <div className="defs">
+          <p className="defs__item">{c.pinchDef}</p>
+          <p className="defs__item">{c.approachDef}</p>
+        </div>
+      </details>
 
-      <div className="needs">
-        <p className="needs__title">{c.pinchNeeds}</p>
-        <ul className="needs__list">
-          {c.pinchNeedsList.map((x) => (
-            <li key={x}>{x}</li>
-          ))}
-        </ul>
-      </div>
+      <details className="fold">
+        <summary className="fold__summary">{c.pinchNeeds}</summary>
+        <div className="needs">
+          <ul className="needs__list">
+            {c.pinchNeedsList.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+      </details>
     </Card>
   );
 }

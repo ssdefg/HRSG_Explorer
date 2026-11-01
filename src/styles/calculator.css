@@ -16,7 +16,7 @@
   color: var(--c-ink-2);
 }
 
-/* ---- Layout: sticky input sidebar + dashboard column -------------------- */
+/* ---- Layout: input sidebar + dashboard column ---------------------------- */
 .calc-layout {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
@@ -25,15 +25,60 @@
 }
 
 .calc-layout__side {
-  position: sticky;
-  top: calc(var(--utilbar-h) + 12px); /* below sticky utility header */
-  max-height: calc(100vh - var(--utilbar-h) - 24px);
-  overflow-y: auto;
+  /* 내부 스크롤 없이 페이지와 함께 흐른다 — 이중 스크롤 제거 */
   border-radius: var(--radius);
 }
 
 .calc-layout__main {
   min-width: 0;
+}
+
+/* ---- Fold: 계산 근거·설명 접기 (기본 접힘) ------------------------------- */
+.fold {
+  margin-top: var(--sp-3);
+  border-top: 1px solid var(--c-line);
+  padding-top: var(--sp-2);
+}
+.fold + .fold {
+  margin-top: 0;
+}
+.fold__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 4px 0;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--c-ink-2);
+}
+.fold__summary::-webkit-details-marker {
+  display: none;
+}
+.fold__summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex: none;
+}
+.fold[open] > .fold__summary::before {
+  transform: rotate(45deg);
+}
+.fold__summary:hover {
+  color: var(--c-ink);
+}
+.fold__body {
+  padding-top: var(--sp-2);
+}
+.fold > .needs,
+.fold > .defs,
+.fold > .table-wrap {
+  margin-top: var(--sp-2);
 }
 
 /* ---- Notes -------------------------------------------------------------- */
@@ -84,8 +129,8 @@
   padding: 0 0 var(--sp-1);
   width: 100%;
   border-bottom: 1px solid var(--c-line);
-  font-size: var(--fs-xs);
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--c-ink-2);
   text-transform: uppercase;
@@ -212,12 +257,18 @@
 .calc-steps__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    'label value'
-    'formula formula';
+  grid-template-areas: 'label value';
+  align-items: baseline;
   gap: 2px var(--sp-3);
-  padding: var(--sp-3) 0;
+  padding: var(--sp-2) 0;
   border-bottom: 1px solid var(--c-line);
+}
+/* 접힘 영역의 대입 산식 — 라벨 아래 모노 글꼴 한 줄 */
+.calc-steps--formulas .calc-steps__row {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'label'
+    'formula';
 }
 
 .calc-steps__row:first-child {
@@ -245,8 +296,9 @@
 }
 
 .calc-steps__value strong {
-  font-size: var(--fs-lg);
-  font-weight: 800;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .calc-steps__unit {
@@ -278,9 +330,10 @@
   stroke: var(--c-surface-2);
 }
 
-.gauge__zone--normal { stroke: var(--c-normal); opacity: 0.85; }
-.gauge__zone--caution { stroke: var(--c-caution); opacity: 0.9; }
-.gauge__zone--danger { stroke: var(--c-warning); opacity: 0.85; }
+/* 상태 구간(270/300 mmH₂O 기준은 BackpressureGauge·calc.ts 그대로) — 채도를 낮춘 얇은 구간 */
+.gauge__zone--normal { stroke: var(--c-normal); opacity: 0.55; }
+.gauge__zone--caution { stroke: var(--c-caution); opacity: 0.65; }
+.gauge__zone--danger { stroke: var(--c-warning); opacity: 0.65; }
 
 .gauge__ref line {
   stroke: var(--c-ink);
@@ -318,7 +371,8 @@
 
 .gauge__value {
   font-size: var(--fs-kpi);
-  font-weight: 800;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   line-height: 1.1;
   letter-spacing: -0.02em;
 }
@@ -341,15 +395,17 @@
 
 .gauge__stats dd {
   margin: 0;
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Required-data lists ------------------------------------------------ */
 .needs {
   margin-top: var(--sp-3);
   padding: var(--sp-3);
+  border: 1px solid var(--c-line);
   border-radius: var(--radius-sm);
-  background: var(--c-surface-2);
+  background: var(--c-bg);
 }
 
 .needs__title {
@@ -445,6 +501,7 @@
   padding: var(--sp-2) var(--sp-3);
   background: var(--c-surface);
   border: 1px solid var(--c-line-strong);
+  border-left: 2px solid var(--c-chart-point);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   font-size: var(--fs-xs);
@@ -915,11 +972,6 @@
 @media (max-width: 1180px) {
   .calc-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .calc-layout__side {
-    position: static;
-    max-height: none;
-    overflow: visible;
   }
   .calc-form {
     display: grid;

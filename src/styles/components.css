@@ -188,7 +188,7 @@
 .kpi {
   padding: var(--sp-4) var(--sp-5);
   gap: var(--sp-2);
-  border-top: 3px solid var(--kpi-accent, var(--c-line-strong));
+  border-top: 2px solid var(--kpi-accent, var(--c-line));
   border-top-left-radius: var(--radius);
   border-top-right-radius: var(--radius);
 }
@@ -220,7 +220,7 @@
 
 .kpi__value {
   font-size: var(--fs-kpi);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
