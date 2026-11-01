@@ -525,9 +525,10 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--c-line);
   border-radius: var(--radius-sm);
-  background: var(--c-surface-2);
+  background: var(--c-bg);
 }
 .econ-summary dt {
   font-size: var(--fs-xs);
@@ -535,16 +536,24 @@ textarea.text-input {
 }
 .econ-summary dd {
   margin: 0;
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
 }
 .econ-summary dd small {
   font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--c-ink-3);
 }
+/* 핵심 결과(손익분기) — 은은한 브랜드 tint 박스 + 2px 액센트 선 */
+.econ-summary > .econ-summary__key {
+  background: var(--c-accent-soft);
+  border-color: transparent;
+  box-shadow: inset 2px 0 0 var(--c-accent);
+}
 .econ-summary__key dd .num {
   font-size: 1.6rem;
+  color: var(--c-accent);
 }
 
 /* 세정 전후 상세 분석 — 접기/펼치기 패널 */

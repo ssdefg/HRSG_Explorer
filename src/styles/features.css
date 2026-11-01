@@ -609,13 +609,20 @@
   gap: 6px;
   flex-wrap: wrap;
 }
+/* 세정 전 값은 작고 옅게, 세정 후 값(kpi__value)은 크게 — 변화 방향이 한눈에 */
 .compare__before {
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: var(--fs-md);
+  font-weight: 500;
   color: var(--c-ink-3);
+  font-variant-numeric: tabular-nums;
 }
 .compare__arrow {
   color: var(--c-ink-3);
+  font-size: var(--fs-sm);
+}
+.compare .kpi__meta .badge--delta {
+  padding: 0;
+  height: auto;
 }
 .compare__measured {
   display: flex;
@@ -643,22 +650,25 @@
 .bars__label {
   color: var(--c-ink-2);
 }
+/* 슬림 막대 — 계산기 '세정 방식별 비용·편익 비교' 막대와 같은 두께·색 체계 */
 .bars__track {
-  height: 18px;
+  height: 8px;
   background: var(--c-surface-2);
-  border-radius: 0 4px 4px 0;
+  border-radius: 4px;
+  overflow: hidden;
 }
 .bars__fill {
   display: block;
   height: 100%;
-  border-radius: 0 4px 4px 0;
+  border-radius: 4px;
 }
 .bars__fill--before { background: var(--c-chart-1); }
 .bars__fill--after { background: var(--c-chart-2); }
 .bars__value {
-  font-weight: 700;
+  font-weight: 600;
   min-width: 96px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .bars__value small {
   font-weight: 500;

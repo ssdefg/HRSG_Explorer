@@ -77,12 +77,13 @@ export function CleaningComparison() {
                 iconSize={10}
                 formatter={(v: string) => <span className="chart-legend-text">{v}</span>}
               />
-              <Bar dataKey="cost" name={`${c.cleanCost} (${c.million})`} fill="var(--c-chart-1)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="cost" name={`${c.cleanCost} (${c.million})`} fill="var(--c-chart-1)" barSize={16} radius={[3, 3, 0, 0]} isAnimationActive={false} />
               <Bar
                 dataKey="benefit"
                 name={`${c.cleanBenefit} (${c.million})`}
                 fill="var(--c-chart-2)"
-                radius={[4, 4, 0, 0]}
+                barSize={16}
+                radius={[3, 3, 0, 0]}
                 isAnimationActive={false}
               />
             </BarChart>
