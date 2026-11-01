@@ -42,7 +42,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 MODELS = [m.strip() for m in os.environ.get("RAG_MODEL", "gemini-3.5-flash,gemini-3.8-flash").split(",") if m.strip()]
 MODEL = MODELS[0]
 MAX_OUTPUT_TOKENS = 8192
-LLM_TIMEOUT_MS = 30_000  # 모델 하나당 — 두 모델을 다 시도해도 프론트엔드 askRag 타임아웃(120s)보다 짧게
+# 모델 하나당. SDK가 이 값을 X-Server-Timeout 헤더로 보내 Gemini 서버 측 마감이 되므로,
+# 생성이 이보다 길어지면 504 DEADLINE_EXCEEDED 가 난다 (평상시 ~15s, 혼잡 시 30s 초과 관측).
+# 두 모델을 다 시도해도(2 × 45s) 프론트엔드 askRag 타임아웃(120s)보다 짧게 유지한다.
+LLM_TIMEOUT_MS = 45_000
 LLM_RETRY_ATTEMPTS = 1  # SDK 자체 재시도 없음 — 과부하·시간 초과면 바로 다음 모델로 넘김
 FALLBACK_CODES = {404, 429, 500, 502, 503, 504}
 TOP_K = 8
