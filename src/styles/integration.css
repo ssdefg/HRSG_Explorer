@@ -647,6 +647,24 @@ textarea.text-input {
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-3);
 }
+/* 검색창·필터·일괄 버튼 높이 통일 (32px) */
+.chk-toolbar .chk-search .text-input {
+  height: 32px;
+  padding: 0 var(--sp-3);
+}
+.chk-toolbar .seg {
+  align-self: center;
+  height: 32px;
+  align-items: stretch;
+}
+.chk-toolbar .seg__btn {
+  min-height: 0;
+  padding-block: 0;
+}
+.chk-toolbar .btn--sm {
+  height: 32px;
+  padding-block: 0;
+}
 
 .chk-search {
   flex: 1 1 240px;
@@ -678,10 +696,14 @@ textarea.text-input {
   font-size: var(--fs-xs);
   padding: 4px 6px;
 }
+.chk-row__cond .text-input,
+.chk-row__value .text-input {
+  height: 28px;
+}
 
 .chk-row.is-highlight {
   background: var(--c-accent-soft);
-  box-shadow: inset 3px 0 0 var(--c-accent);
+  box-shadow: inset 2px 0 0 var(--c-accent);
   transition: background-color 0.3s ease;
 }
 
