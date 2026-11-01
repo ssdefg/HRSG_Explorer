@@ -109,7 +109,8 @@
   min-height: 320px;
   max-height: 640px;
   overflow-y: auto;
-  background: var(--c-surface-2);
+  background: var(--c-bg);
+  border: 1px solid var(--c-line);
   border-radius: var(--radius-sm);
 }
 
@@ -125,22 +126,28 @@
   justify-content: flex-end;
 }
 
+/* 사용자 질문 — 우측 정렬, 차분한 surface-2 말풍선 (면 강조 없음) */
 .qa-question {
   max-width: 80%;
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius) var(--radius) 2px var(--radius);
-  background: var(--c-ink);
-  color: var(--c-surface);
+  border: 1px solid var(--c-line);
+  background: var(--c-surface-2);
+  color: var(--c-ink);
   font-size: var(--fs-sm);
+  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+/* AI 답변 카드 — 좌측 2px 브랜드 오렌지 세로 바 (시연용 답변은 '시연용 답변' 배지로 구분).
+   변형(fallback·error)은 --qa-bar만 바꾼다. */
 .qa-answer {
+  --qa-bar: var(--c-accent);
   max-width: 100%;
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
   border: 1px solid var(--c-line);
-  border-left: 3px solid var(--c-accent);
+  border-left: 2px solid var(--qa-bar);
   border-radius: var(--radius-sm);
   background: var(--c-surface);
   display: flex;
@@ -149,7 +156,7 @@
 }
 
 .qa-answer--fallback {
-  border-left-color: var(--c-ink-3);
+  --qa-bar: var(--c-ink-3);
 }
 
 .qa-answer__head {
@@ -166,23 +173,27 @@
 
 .qa-answer__title {
   font-weight: 700;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
+  letter-spacing: -0.01em;
+  line-height: 1.4;
 }
 
 .qa-answer__p {
   font-size: var(--fs-sm);
+  line-height: 1.65;
   color: var(--c-ink);
 }
 
 .qa-answer__block {
-  margin-top: var(--sp-1);
+  margin-top: var(--sp-2);
 }
 
 .qa-answer__block-title {
   font-size: var(--fs-xs);
-  font-weight: 700;
-  color: var(--c-ink-2);
-  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--c-ink-3);
+  letter-spacing: 0.01em;
+  margin-bottom: 6px;
 }
 
 .qa-answer__caption {
@@ -203,7 +214,7 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: var(--sp-3);
   align-items: center;
-  padding: 6px 10px;
+  padding: 7px 12px;
   font-size: var(--fs-xs);
 }
 
@@ -217,6 +228,8 @@
 
 .qa-facts__value {
   font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
@@ -285,19 +298,23 @@
   gap: var(--sp-2);
 }
 
+/* 추천 질문 — 중성 외곽선 버튼, hover 시에만 accent 외곽선 + 옅은 tint */
 .qa-preset {
   width: 100%;
   text-align: left;
   font: inherit;
   font-size: var(--fs-sm);
-  color: var(--c-ink);
+  line-height: 1.45;
+  color: var(--c-ink-2);
   background: var(--c-surface);
-  border: 1px solid var(--c-line-strong);
+  border: 1px solid var(--c-line);
   border-radius: var(--radius-sm);
   padding: var(--sp-2) var(--sp-3);
   cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
-.qa-preset:hover {
+.qa-preset:hover:not(:disabled) {
+  color: var(--c-ink);
   border-color: var(--c-accent);
   background: var(--c-accent-soft);
 }
@@ -793,17 +810,17 @@
   }
 }
 
-/* 참고문헌 RAG 답변 — 시연용 답변(accent)과 구분되는 좌측 막대 + 출처 목록 */
+/* 참고문헌 RAG 답변 — 브랜드 오렌지 외곽선 배지 + 접는 출처 목록 */
 .badge--rag {
   height: 22px;
-  border: 1px solid var(--c-ink-2);
-  color: var(--c-ink);
-  background: var(--c-surface);
+  border: 1px solid var(--c-accent);
+  color: var(--c-accent-ink);
+  background: transparent;
   border-radius: var(--radius-sm);
   font-weight: 700;
 }
 .qa-answer--rag {
-  border-left-color: var(--c-ink-2);
+  --qa-bar: var(--c-accent);
 }
 .rag-answer__list {
   margin: 0;
@@ -813,9 +830,11 @@
 .rag-cite {
   font-size: 0.85em;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--c-accent-ink);
   text-decoration: none;
   white-space: nowrap;
+  vertical-align: 0.15em;
 }
 .rag-cite:hover,
 .rag-cite:focus-visible {
@@ -829,15 +848,18 @@
   border-radius: var(--radius-sm);
   font-size: var(--fs-xs);
 }
+/* 인용 [n] 클릭 시 페이지도 함께 스크롤되므로, 고정 상단 헤더 높이만큼 여백을 둔다 */
 .rag-source {
-  padding: 6px 10px;
-  scroll-margin-top: var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  scroll-margin-top: calc(var(--utilbar-h) + var(--sp-4));
 }
 .rag-source + .rag-source {
   border-top: 1px solid var(--c-line);
 }
+/* 본문 인용 [n] 클릭 시 해당 출처 — 옅은 tint + 2px accent 선 */
 .rag-source:target {
   background: var(--c-accent-soft);
+  box-shadow: inset 2px 0 0 var(--c-accent);
 }
 .rag-source__head {
   display: flex;
@@ -847,8 +869,9 @@
   color: var(--c-ink-2);
 }
 .rag-source__n {
+  font-family: var(--font-mono);
   font-weight: 700;
-  color: var(--c-ink);
+  color: var(--c-accent-ink);
 }
 .rag-source__file {
   min-width: 0;
@@ -859,6 +882,8 @@
   color: var(--c-ink-3);
 }
 .rag-source__score {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--c-ink-3);
 }
 .rag-source details summary {
@@ -867,7 +892,8 @@
   margin-top: 2px;
 }
 .rag-source__text {
-  margin: 4px 0 0;
+  margin: 6px 0 2px;
+  line-height: 1.6;
   color: var(--c-ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

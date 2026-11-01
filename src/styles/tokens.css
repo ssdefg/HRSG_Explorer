@@ -128,7 +128,7 @@
   --c-surface: var(--palette-navy-900);
   --c-surface-2: #1e293b;
   --c-surface-sunken: #0b1222;
-  --c-line: rgba(255, 255, 255, 0.08);
+  --c-line: rgba(255, 255, 255, 0.07);
   --c-line-strong: rgba(255, 255, 255, 0.14);
 
   --c-ink: var(--palette-slate-200);   /* 13:1 on #111827 */

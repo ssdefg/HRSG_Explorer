@@ -155,13 +155,13 @@ function RecordDetail({ r, lang }: { r: QaHistoryRecord; lang: Lang }) {
   );
 }
 
-/** AI 질의응답 아래에 붙는 질문 기록 — 목록은 접기/펼치기, 길어지면 스크롤 */
+/** 대시보드 하단의 질문 기록 — 기본은 접힘(목록·저장 안내는 펼쳤을 때 표시), 길어지면 스크롤 */
 export function QaHistoryPanel() {
   const { lang } = useAppSettings();
   const x = TXT[lang];
   const toast = useToast();
   const records = useQaHistory();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
 
@@ -190,8 +190,6 @@ export function QaHistoryPanel() {
       subtitle={x.sub}
       badges={<DataTypeBadges types={['userInput', 'mock']} />}
     >
-      <p className="note">{x.storage}</p>
-
       <div className="qa-hist__toolbar">
         <button type="button" className="btn btn--ghost btn--sm" aria-expanded={open} aria-controls="qa-hist-list" onClick={() => setOpen((o) => !o)}>
           {open ? x.hide : x.show}
@@ -216,6 +214,7 @@ export function QaHistoryPanel() {
 
       {open && (
         <div id="qa-hist-list">
+          <p className="note">{x.storage}</p>
           {records.length === 0 ? (
             <p className="empty-state" data-testid="qa-hist-empty">
               {x.empty}

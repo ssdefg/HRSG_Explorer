@@ -13,13 +13,12 @@ import {
   useToast,
   type QaMessage,
 } from '@/context/Workspace';
-import { QA_CATEGORIES, QA_CATEGORY_LABEL, QA_FALLBACK_TEXT, QA_PRESETS } from '@/data/qaPresets';
+import { QA_CATEGORIES, QA_CATEGORY_LABEL, QA_FALLBACK_TEXT, QA_PRESETS, type QaCategory } from '@/data/qaPresets';
 import { CHECKLIST_ITEMS } from '@/data/checklistItems';
 import { SECTION_IDS, TABS } from '@/data/tabs';
 import { goToTab } from '@/lib/useHashTab';
 import { qaHistory, qaSourceKey, type QaHistoryAnswer } from '@/lib/qaHistory';
 import { buildAnswer, type AnswerContext, type SourceKind } from '@/components/qa/answers';
-import { QaHistoryPanel } from '@/components/qa/QaHistoryPanel';
 import { RagAnswerView, RagBadge, ragHistoryAnswer } from '@/components/qa/RagAnswerView';
 import { fetchRagHealth, type RagHealth } from '@/lib/ragClient';
 
@@ -27,6 +26,8 @@ const TXT = {
   ko: {
     sectionTitle: 'AI 질의응답',
     sectionDesc: 'HRSG 운전 상태, 성능 저하, 세정 방식, 경제성, 추가 데이터 요청에 관해 질문합니다. 추천 질문과 직접 입력한 질문 모두 HRSG 참고문헌에서 관련 문단을 검색해 AI가 출처와 함께 답변합니다.',
+    panelTitle: 'AI Engineering Assistant',
+    panelSub: '운전 상태, 성능 저하 원인, 세정 경제성을 질문하세요.',
     notice: {
       on: (h: RagHealth) =>
         `추천 질문과 직접 입력한 질문 모두 HRSG 참고문헌 ${h.docs}편(${h.passages}개 문단)에서 관련 문단 8개를 검색해 AI가 실시간으로 답변하고 출처를 표시합니다. 기업 제공 문서는 아직 포함되지 않았습니다.`,
@@ -94,6 +95,8 @@ const TXT = {
   en: {
     sectionTitle: 'AI Q&A',
     sectionDesc: 'Ask about HRSG operation, degradation, cleaning methods, economics and data requests. Both suggested and typed questions are answered by AI from retrieved HRSG reference passages, with sources.',
+    panelTitle: 'AI Engineering Assistant',
+    panelSub: 'Ask about operating status, causes of performance loss, and cleaning economics.',
     notice: {
       on: (h: RagHealth) =>
         `Both suggested and typed questions retrieve 8 passages from ${h.docs} HRSG references (${h.passages} passages) and are answered by AI in real time, with sources. Partner documents are not included yet.`,
@@ -360,7 +363,7 @@ function AnswerView({ msg, ctx, x }: { msg: Extract<QaMessage, { kind: 'answer' 
 }
 
 /**
- * AI 질의응답 — 대시보드 최상단에 배치되는 영역 (기존 독립 화면의 내용을 그대로 옮김).
+ * AI 질의응답 — 대시보드 중단 우측의 컴팩트 AI 카드 (기존 독립 화면의 내용을 그대로 옮김).
  * 대화(케이스별)와 별도로, 새 답변이 나오면 질문·답변을 질문 기록(qaHistory)에 저장한다.
  */
 export function AiQaSection() {
@@ -375,6 +378,8 @@ export function AiQaSection() {
   const logRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const attachedSnap = qa.attachment ? history.getSnapshot(qa.attachment) : undefined;
+  // 추천 질문 카테고리 탭 선택 (화면 표시용 상태)
+  const [presetCat, setPresetCat] = useState<QaCategory>(QA_CATEGORIES[0]);
   // RAG 서버 연결 상태 — 안내 문구와 '데이터 출처 및 신뢰성' 표에 반영 (null = 미연결)
   const [rag, setRag] = useState<RagHealth | null>(null);
   useEffect(() => {
@@ -446,155 +451,193 @@ export function AiQaSection() {
     // 새 메시지가 생길 때만 확인한다 (언어·계산값 변경으로 기록을 다시 만들지 않음)
   }, [qa.messages, caseId]);
 
-  const presetChips = (compact = false) => (
-    <div className={`qa-presets${compact ? ' qa-presets--compact' : ''}`}>
-      {QA_CATEGORIES.map((cat) => (
-        <div key={cat} className="qa-presets__group">
-          <p className="qa-presets__cat">{QA_CATEGORY_LABEL[cat][lang]}</p>
-          <div className="qa-presets__chips">
-            {QA_PRESETS.filter((p) => p.category === cat).map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="qa-preset"
-                disabled={qa.pending}
-                onClick={() => qa.askPreset(p.id, p.question[lang], lang)}
-                data-preset={p.id}
-              >
-                {p.question[lang]}
-              </button>
-            ))}
-          </div>
+  // 추천 질문 — 사이드 패널. 카테고리 탭(기존 분류명) + 질문 원문 알약 버튼 (세로 정렬)
+  const presetPills = () => (
+    <div className="qa-pills">
+      <div className="qa-pills__head">
+        <span className="qa-pills__title" title={rag ? x.presetsSub.on : x.presetsSub.off}>
+          {x.presetsTitle}
+        </span>
+        <div className="qa-pills__cats" role="group" aria-label={x.presetsTitle}>
+          {QA_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              className="qa-pills__cat"
+              aria-pressed={presetCat === cat}
+              onClick={() => setPresetCat(cat)}
+            >
+              {QA_CATEGORY_LABEL[cat][lang]}
+            </button>
+          ))}
         </div>
-      ))}
+      </div>
+      <div className="qa-pills__list" role="group" aria-label={QA_CATEGORY_LABEL[presetCat][lang]}>
+        {QA_PRESETS.filter((p) => p.category === presetCat).map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className="qa-pill"
+            disabled={qa.pending}
+            onClick={() => qa.askPreset(p.id, p.question[lang], lang)}
+            data-preset={p.id}
+          >
+            {p.question[lang]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
   return (
     <section className="dash-ai" id={SECTION_IDS.ai} aria-labelledby="dash-ai-title" data-testid="dash-ai">
-      <div className="dash-ai__head">
-        <h3 className="section-title" id="dash-ai-title">
-          {x.sectionTitle}
-        </h3>
-        <span className="dash-ai__badges">
-          <DataTypeBadges types={['mock', 'example', 'planned']} />
-        </span>
-        {qa.messages.length > 0 && (
-          <button type="button" className="btn btn--ghost btn--sm dash-ai__clear" onClick={qa.clear}>
-            {x.clear}
-          </button>
-        )}
-      </div>
-      <p className="dash-ai__desc">{x.sectionDesc}</p>
-
-      <p className="page-notice page-notice--ai" role="note">
-        {rag ? <RagBadge lang={lang} /> : <DemoAnswerBadge text={x.demoBadge} />}
-        <span>{rag ? x.notice.on(rag) : x.notice.off}</span>
-      </p>
-
-      <div className="qa-layout">
-        <Card className="qa-conv" title={x.convTitle} subtitle={x.convSub} badges={rag ? <RagBadge lang={lang} /> : <DemoAnswerBadge text={x.demoBadge} />}>
-          <ol className="qa-log" ref={logRef} aria-live="polite">
-            {qa.messages.length === 0 && !qa.pending && <li className="qa-log__empty">{x.convEmpty}</li>}
-            {qa.messages.map((m) => (
-              <li key={m.id} className={`qa-log__item qa-log__item--${m.kind}`}>
-                {m.kind === 'question' && (
-                  <div className="qa-question">
-                    <span className="sr-only">{x.you}: </span>
-                    <span className="qa-question__text">{m.text}</span>
-                    <time className="qa-time qa-time--q" dateTime={m.at}>
-                      {fmtTime(m.at, lang)}
-                    </time>
-                  </div>
-                )}
-                {m.kind === 'answer' && <AnswerView msg={m} ctx={ctxFor(m.snapshotId)} x={x} />}
-                {m.kind === 'rag' && (
-                  <RagAnswerView
-                    msg={m}
-                    lang={lang}
-                    time={
-                      <time className="qa-time" dateTime={m.at}>
-                        {fmtTime(m.at, lang)}
-                      </time>
-                    }
-                  />
-                )}
-                {m.kind === 'fallback' && (
-                  <article className="qa-answer qa-answer--fallback">
-                    <header className="qa-answer__head">
-                      <DemoAnswerBadge text={x.demoBadge} />
-                      <time className="qa-time" dateTime={m.at}>
-                        {fmtTime(m.at, lang)}
-                      </time>
-                    </header>
-                    <p className="qa-answer__title">{x.fallbackTitle}</p>
-                    <p className="qa-answer__p" data-testid="fallback-text">
-                      {QA_FALLBACK_TEXT[lang]}
-                    </p>
-                    <div className="qa-answer__links">
-                      <button type="button" className="btn btn--ghost btn--sm" onClick={() => goToTab('calculator')}>
-                        {x.open(TABS.find((t) => t.id === 'calculator')?.label[lang] ?? '')}
-                      </button>
-                    </div>
-                  </article>
-                )}
-                {m.kind === 'error' && (
-                  <article className="qa-answer qa-answer--error" role="alert">
-                    <header className="qa-answer__head">
-                      <DemoAnswerBadge text={x.demoBadge} />
-                      <span className="qa-answer__via">{x.errorTitle}</span>
-                    </header>
-                    <p className="qa-answer__p">{x.errorSnapshot}</p>
-                  </article>
-                )}
-              </li>
-            ))}
-            {qa.pending && (
-              <li className="qa-log__item qa-log__pending" role="status">
-                <span className="qa-spinner" aria-hidden="true" />
-                {x.pending}
-              </li>
-            )}
-          </ol>
-
-          <form className="qa-form" onSubmit={submit}>
-            {attachedSnap && (
-              <p className="qa-attach">
-                <span>{x.attached(attachedSnap.seq)}</span>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => qa.setAttachment(null)}>
-                  {x.detach}
-                </button>
-              </p>
-            )}
-            <label htmlFor="qa-input" className="sr-only">
-              {x.placeholder}
-            </label>
-            <textarea
-              id="qa-input"
-              ref={inputRef}
-              className="qa-form__input"
-              rows={2}
-              value={qa.draft}
-              placeholder={x.placeholder}
-              onChange={(e) => qa.setDraft(e.target.value)}
-              onKeyDown={onKey}
-              maxLength={500}
-            />
-            <div className="qa-form__row">
-              <span className="field__hint">{x.sendHint}</span>
-              <button type="submit" className="btn btn--primary" disabled={!qa.draft.trim() || qa.pending}>
-                {x.send}
+      <Card className="ai-panel">
+        <header className="ai-panel__head">
+          <div className="ai-panel__titles">
+            <span className="ai-panel__eyebrow">{x.sectionTitle}</span>
+            <h3 className="ai-panel__title" id="dash-ai-title">
+              {x.panelTitle}
+            </h3>
+            <p className="ai-panel__sub">{x.panelSub}</p>
+          </div>
+          <div className="ai-panel__tools">
+            {/* AI/RAG 연결 상태 — 6px 점 + 간결한 텍스트 (상세 안내는 아래 '데이터 출처 및 신뢰성') */}
+            <span
+              className={`ai-status ${rag ? 'ai-status--on' : 'ai-status--off'}`}
+              role="note"
+              title={rag ? x.notice.on(rag) : x.notice.off}
+            >
+              {rag ? <RagBadge lang={lang} /> : <DemoAnswerBadge text={x.demoBadge} />}
+            </span>
+            {qa.messages.length > 0 && (
+              <button type="button" className="btn btn--ghost btn--sm dash-ai__clear" onClick={qa.clear}>
+                {x.clear}
               </button>
-            </div>
-          </form>
-        </Card>
+            )}
+          </div>
+          <span className="ai-panel__badges">
+            <DataTypeBadges types={['mock', 'example', 'planned']} />
+          </span>
+        </header>
 
-        <div className="qa-side">
-          <Card title={x.presetsTitle} subtitle={rag ? x.presetsSub.on : x.presetsSub.off}>
-            {presetChips()}
-          </Card>
+        <div className="ai-panel__grid">
+          {/* 메인 챗: 대화 표시창 바로 아래에 입력창을 붙여 하나의 챗 UI로 */}
+          <div className="ai-chat">
+            <ol className="qa-log" ref={logRef} aria-live="polite" aria-label={x.convTitle}>
+              {qa.messages.length === 0 && !qa.pending && <li className="qa-log__empty">{x.convEmpty}</li>}
+              {qa.messages.map((m) => (
+                <li key={m.id} className={`qa-log__item qa-log__item--${m.kind}`}>
+                  {m.kind === 'question' && (
+                    <div className="qa-question">
+                      <span className="sr-only">{x.you}: </span>
+                      <span className="qa-question__text">{m.text}</span>
+                      <time className="qa-time qa-time--q" dateTime={m.at}>
+                        {fmtTime(m.at, lang)}
+                      </time>
+                    </div>
+                  )}
+                  {m.kind === 'answer' && <AnswerView msg={m} ctx={ctxFor(m.snapshotId)} x={x} />}
+                  {m.kind === 'rag' && (
+                    <RagAnswerView
+                      msg={m}
+                      lang={lang}
+                      time={
+                        <time className="qa-time" dateTime={m.at}>
+                          {fmtTime(m.at, lang)}
+                        </time>
+                      }
+                    />
+                  )}
+                  {m.kind === 'fallback' && (
+                    <article className="qa-answer qa-answer--fallback">
+                      <header className="qa-answer__head">
+                        <DemoAnswerBadge text={x.demoBadge} />
+                        <time className="qa-time" dateTime={m.at}>
+                          {fmtTime(m.at, lang)}
+                        </time>
+                      </header>
+                      <p className="qa-answer__title">{x.fallbackTitle}</p>
+                      <p className="qa-answer__p" data-testid="fallback-text">
+                        {QA_FALLBACK_TEXT[lang]}
+                      </p>
+                      <div className="qa-answer__links">
+                        <button type="button" className="btn btn--ghost btn--sm" onClick={() => goToTab('calculator')}>
+                          {x.open(TABS.find((t) => t.id === 'calculator')?.label[lang] ?? '')}
+                        </button>
+                      </div>
+                    </article>
+                  )}
+                  {m.kind === 'error' && (
+                    <article className="qa-answer qa-answer--error" role="alert">
+                      <header className="qa-answer__head">
+                        <DemoAnswerBadge text={x.demoBadge} />
+                        <span className="qa-answer__via">{x.errorTitle}</span>
+                      </header>
+                      <p className="qa-answer__p">{x.errorSnapshot}</p>
+                    </article>
+                  )}
+                </li>
+              ))}
+              {qa.pending && (
+                <li className="qa-log__item qa-log__pending" role="status">
+                  <span className="qa-spinner" aria-hidden="true" />
+                  {x.pending}
+                </li>
+              )}
+            </ol>
+            <form className="qa-form" onSubmit={submit}>
+              {attachedSnap && (
+                <p className="qa-attach">
+                  <span>{x.attached(attachedSnap.seq)}</span>
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => qa.setAttachment(null)}>
+                    {x.detach}
+                  </button>
+                </p>
+              )}
+              <label htmlFor="qa-input" className="sr-only">
+                {x.placeholder}
+              </label>
+              <div className="qa-input">
+                <textarea
+                  id="qa-input"
+                  ref={inputRef}
+                  className="qa-form__input"
+                  rows={1}
+                  value={qa.draft}
+                  placeholder={x.placeholder}
+                  onChange={(e) => qa.setDraft(e.target.value)}
+                  onKeyDown={onKey}
+                  maxLength={500}
+                />
+                <button type="submit" className="qa-send" disabled={!qa.draft.trim() || qa.pending} aria-label={x.send} title={x.send}>
+                  <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                    <path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+              <div className="qa-form__row">
+                <span className="field__hint">{x.sendHint}</span>
+                <span className="field__hint">{x.convSub}</span>
+              </div>
+            </form>
+          </div>
 
-          <Card title={x.reliTitle} badges={<DataTypeBadges types={['planned']} />}>
+          {/* 사이드: 추천 질문 패널 */}
+          <aside className="ai-side">
+            {presetPills()}
+          </aside>
+        </div>
+
+        {/* 기존 안내·신뢰성 표·추가 데이터 안내 — 내용 그대로, 접어서 보관 */}
+        <details className="ai-info">
+          <summary className="ai-info__summary">
+            {x.reliTitle}
+            <DataTypeBadges types={['planned']} />
+          </summary>
+          <div className="ai-info__body">
+            <p className="ai-info__text">{x.sectionDesc}</p>
+            <p className="ai-info__text">{rag ? x.notice.on(rag) : x.notice.off}</p>
+            <p className="ai-info__text">{rag ? x.presetsSub.on : x.presetsSub.off}</p>
             <dl className="reli-list">
               {x.reliRows(rag).map(([k, v]) => (
                 <div key={k}>
@@ -604,20 +647,21 @@ export function AiQaSection() {
               ))}
             </dl>
             <p className="note">{x.sessionNote}</p>
-          </Card>
+            <div className="ai-info__data">
+              <h4 className="ai-info__heading">
+                {x.dataTitle} <DataTypeBadges types={['noMeasured']} />
+              </h4>
+              <p className="qa-side__text">
+                {x.dataBody(checklist.summary.receivedCount, checklist.summary.total, checklist.summary.byStatus.requestNeeded)}
+              </p>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => goToTab('checklist')}>
+                {x.open(TABS.find((t) => t.id === 'checklist')?.label[lang] ?? '')}
+              </button>
+            </div>
+          </div>
+        </details>
+      </Card>
 
-          <Card title={x.dataTitle} badges={<DataTypeBadges types={['noMeasured']} />}>
-            <p className="qa-side__text">
-              {x.dataBody(checklist.summary.receivedCount, checklist.summary.total, checklist.summary.byStatus.requestNeeded)}
-            </p>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => goToTab('checklist')}>
-              {x.open(TABS.find((t) => t.id === 'checklist')?.label[lang] ?? '')}
-            </button>
-          </Card>
-        </div>
-      </div>
-
-      <QaHistoryPanel />
     </section>
   );
 }
