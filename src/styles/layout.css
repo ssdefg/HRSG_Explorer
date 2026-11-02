@@ -331,6 +331,33 @@
   gap: var(--sp-1);
 }
 
+/* 한 줄 헤더 (대시보드) — 제목 좌측 + 작은 데이터 유형 표기 우측, 높이 48px 내외 */
+.page--compact {
+  gap: var(--sp-4);
+}
+
+.page-head--compact {
+  align-items: center;
+  min-height: 40px;
+  margin-top: calc(var(--sp-2) * -1);
+  gap: var(--sp-2) var(--sp-4);
+}
+
+.page-head--compact .page-head__title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-head__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin-left: auto;
+  font-size: 11px;
+}
+
 .section-title {
   font-size: var(--fs-sm);
   font-weight: 700;

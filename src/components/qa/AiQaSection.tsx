@@ -494,11 +494,12 @@ export function AiQaSection() {
       <Card className="ai-panel">
         <header className="ai-panel__head">
           <div className="ai-panel__titles">
-            <span className="ai-panel__eyebrow">{x.sectionTitle}</span>
-            <h3 className="ai-panel__title" id="dash-ai-title">
+            <h3 className="ai-panel__title" id="dash-ai-title" title={x.panelSub}>
               {x.panelTitle}
             </h3>
-            <p className="ai-panel__sub">{x.panelSub}</p>
+            <span className="ai-panel__badges">
+              <DataTypeBadges types={['mock', 'example', 'planned']} />
+            </span>
           </div>
           <div className="ai-panel__tools">
             {/* AI/RAG 연결 상태 — 6px 점 + 간결한 텍스트 (상세 안내는 아래 '데이터 출처 및 신뢰성') */}
@@ -515,9 +516,6 @@ export function AiQaSection() {
               </button>
             )}
           </div>
-          <span className="ai-panel__badges">
-            <DataTypeBadges types={['mock', 'example', 'planned']} />
-          </span>
         </header>
 
         <div className="ai-panel__grid">
@@ -608,6 +606,7 @@ export function AiQaSection() {
                   onChange={(e) => qa.setDraft(e.target.value)}
                   onKeyDown={onKey}
                   maxLength={500}
+                  aria-describedby="qa-input-hint"
                 />
                 <button type="submit" className="qa-send" disabled={!qa.draft.trim() || qa.pending} aria-label={x.send} title={x.send}>
                   <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -615,10 +614,9 @@ export function AiQaSection() {
                   </svg>
                 </button>
               </div>
-              <div className="qa-form__row">
-                <span className="field__hint">{x.sendHint}</span>
-                <span className="field__hint">{x.convSub}</span>
-              </div>
+              <p className="sr-only" id="qa-input-hint">
+                {x.sendHint} · {x.convSub}
+              </p>
             </form>
           </div>
 

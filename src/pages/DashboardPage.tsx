@@ -218,7 +218,7 @@ export function DashboardPage({ navCount }: { navCount: number }) {
   if (entries.length === 0) tasks.push({ text: x.tMeasure, action: () => goToTab('validation') });
 
   return (
-    <PageScaffold tabId="dashboard" pageDataTypes={['mock', 'example', 'noMeasured', 'planned']}>
+    <PageScaffold tabId="dashboard" compact pageDataTypes={['mock', 'example', 'noMeasured', 'planned']}>
       {/* 최상단: 핵심 KPI 4개 — 값·배지는 아래 상세 카드와 같은 중앙 상태 */}
       <div className="dash-overview" role="group" aria-label={t.keyIndicators}>
         <Card className="ov-kpi" title={x.bp} badges={demoBadge}>

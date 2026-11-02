@@ -1090,17 +1090,19 @@ textarea.text-input {
 }
 .ov-kpi .card__head {
   flex-wrap: nowrap;
+  align-items: center;
+  padding: var(--sp-4) var(--sp-4) 0;
 }
 .ov-kpi .card__title {
-  font-size: var(--fs-sm);
+  font-size: 13px;
   font-weight: 600;
-  color: var(--c-ink-2);
+  color: var(--c-label);
 }
 .ov-kpi .card__body {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
-  padding-top: var(--sp-3);
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4) var(--sp-4);
 }
 .ov-kpi__value {
   display: flex;
@@ -1110,14 +1112,14 @@ textarea.text-input {
   margin: 0;
 }
 .ov-kpi__value .num:first-child {
-  font-size: var(--fs-kpi);
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 .ov-kpi__value small {
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   font-weight: 500;
   color: var(--c-ink-3);
 }
@@ -1147,14 +1149,16 @@ textarea.text-input {
 
 /* DEMO 미니 뱃지 — 중성 외곽선 + 모노 글자 */
 .badge--demo-mini {
-  height: 18px;
-  padding: 0 6px;
-  border: 1px solid var(--c-line-strong);
+  height: 16px;
+  padding: 0 5px;
+  border: 0;
   border-radius: 4px;
+  background: var(--c-surface-2);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  line-height: 16px;
   color: var(--c-ink-3);
 }
 
@@ -1163,35 +1167,27 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+  padding: var(--sp-4);
 }
 /* 제목이 눌려 줄바꿈되지 않도록 — 공간이 부족하면 상태·초기화 버튼이 다음 줄로 */
 .ai-panel__head {
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-4);
-  align-items: flex-start;
+  align-items: center;
 }
 .ai-panel__titles {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px var(--sp-3);
   flex: 1 1 280px;
   min-width: 0;
 }
-.ai-panel__eyebrow {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--c-ink-3);
-}
 .ai-panel__title {
-  font-size: var(--fs-lg);
+  font-size: var(--fs-md);
   font-weight: 700;
   letter-spacing: -0.01em;
-}
-.ai-panel__sub {
-  font-size: var(--fs-sm);
-  color: var(--c-ink-2);
 }
 .ai-panel__tools {
   display: flex;
@@ -1201,8 +1197,8 @@ textarea.text-input {
   gap: var(--sp-2) var(--sp-3);
 }
 .ai-panel__badges {
-  flex-basis: 100%;
   display: flex;
+  font-size: 11px;
   flex-wrap: wrap;
   gap: var(--sp-1);
 }
@@ -1252,15 +1248,15 @@ textarea.text-input {
   overflow: hidden;
 }
 .ai-chat .qa-log {
-  flex: 1;
+  height: 260px;
   min-height: 260px;
-  max-height: 360px;
+  max-height: 260px;
   border: 0;
   border-radius: 0;
 }
 .ai-chat .qa-form {
   gap: 4px;
-  padding: var(--sp-2) var(--sp-3) var(--sp-2);
+  padding: var(--sp-2);
   border-top: 1px solid var(--c-line);
   background: var(--c-surface);
 }
@@ -1270,6 +1266,8 @@ textarea.text-input {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  max-height: 318px;
+  overflow-y: auto;
   padding: var(--sp-3);
   border: 1px solid var(--c-line);
   border-radius: var(--radius);
@@ -1281,8 +1279,9 @@ textarea.text-input {
 }
 .ai-side .qa-pill {
   width: 100%;
-  border-radius: 14px;
-  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 /* 추천 질문 — 입력창 바로 위. 카테고리 탭 + 질문 원문 알약 버튼 (줄바꿈 배치) */
@@ -1311,7 +1310,7 @@ textarea.text-input {
 .qa-pills__cat {
   border: 0;
   background: none;
-  padding: 4px 8px;
+  padding: 3px 6px;
   font: inherit;
   font-size: 11px;
   font-weight: 500;
@@ -1360,9 +1359,9 @@ textarea.text-input {
   display: flex;
   align-items: flex-end;
   gap: var(--sp-2);
-  padding: 6px 6px 6px var(--sp-4);
+  padding: 4px 4px 4px var(--sp-3);
   border: 1px solid var(--c-line-strong);
-  border-radius: 20px;
+  border-radius: var(--radius-sm);
   background: var(--c-surface);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -1372,7 +1371,8 @@ textarea.text-input {
 }
 .qa-input .qa-form__input {
   flex: 1;
-  min-height: 28px;
+  min-height: 26px;
+  font-size: var(--fs-sm);
   max-height: 160px;
   padding: 4px 0;
   border: 0;
@@ -1387,10 +1387,10 @@ textarea.text-input {
   flex: none;
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--c-cta-line);
-  border-radius: 50%;
+  border-radius: 4px;
   background: var(--c-cta-bg);
   color: var(--c-cta-ink);
   cursor: pointer;

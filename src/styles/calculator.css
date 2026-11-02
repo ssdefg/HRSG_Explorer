@@ -867,12 +867,21 @@
 }
 
 /* ---- Tables ------------------------------------------------------------- */
+/* 차트 | 비교표 — 표(4열)가 가로 스크롤 없이 들어가도록 표 쪽에 폭을 더 준다 */
 .clean-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: var(--sp-4);
   align-items: start;
   margin-top: var(--sp-3);
+}
+.clean-grid .data-table th,
+.clean-grid .data-table td {
+  padding: 7px 6px;
+}
+.clean-grid .data-table th:first-child,
+.clean-grid .data-table td:first-child {
+  padding-left: 8px;
 }
 
 .table-wrap {
