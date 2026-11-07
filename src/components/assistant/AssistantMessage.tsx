@@ -61,6 +61,7 @@ function RagAnswer({ msg, lang, question, convId }: { msg: RagMsg; lang: Lang; q
   const x = ASSISTANT_TXT[lang];
   const toast = useToast();
   const key = `${convId}-${msg.id}`;
+  const direct = msg.mode === 'direct';
   // 환각 가드 — 검색 상위 문단 · 첨부 화면 데이터 · 질문에 없는 수치 (가이드 §3.2)
   const unsupported = msg.answer
     ? findUnsupportedNumbers(msg.answer, [...msg.sources.map((s) => s.text), contextToText(msg.context), question ?? ''])
@@ -71,16 +72,19 @@ function RagAnswer({ msg, lang, question, convId }: { msg: RagMsg; lang: Lang; q
     toast.push(ok ? x.copied : x.copyFail, ok ? 'success' : 'error');
   };
   return (
-    <article className="asst-ans" data-answer="rag">
+    <article className="asst-ans" data-answer={direct ? 'direct' : 'rag'}>
       <header className="asst-ans__head">
         <span className="asst-ans__who">{x.ai}</span>
         <span className="asst-ans__meta">
-          {msg.model ?? (lang === 'ko' ? '검색 전용' : 'search only')} · {x.sources(msg.sources.length)} · {Math.round(msg.retrievalMs)}ms
+          {direct
+            ? `${msg.model ?? 'Gemini'} · ${x.directMeta}`
+            : `${msg.model ?? (lang === 'ko' ? '검색 전용' : 'search only')} · ${x.sources(msg.sources.length)} · ${Math.round(msg.retrievalMs)}ms`}
         </span>
         <time className="asst-time" dateTime={msg.at}>
           {fmtTime(msg.at, lang)}
         </time>
       </header>
+      {direct && <p className="asst-note asst-note--warn">{x.directNote}</p>}
       {unsupported.length > 0 && (
         <p className="asst-warn" role="alert" data-testid="unsupported-numbers">
           ⚠ {lang === 'ko' ? '출처 외 수치 포함 주의' : 'Contains figures not in sources'}: <span className="num">{unsupported.join(', ')}</span>
@@ -101,7 +105,7 @@ function RagAnswer({ msg, lang, question, convId }: { msg: RagMsg; lang: Lang; q
         />
       ) : (
         <p className="asst-note asst-note--warn">
-          {x.searchOnly} {NO_ANSWER[lang][msg.llmStatus === 'ok' ? 'error' : msg.llmStatus]}
+          {!direct && x.searchOnly} {NO_ANSWER[lang][msg.llmStatus === 'ok' ? 'error' : msg.llmStatus]}
           {msg.llmMessage && ` (${msg.llmMessage})`}
         </p>
       )}

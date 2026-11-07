@@ -162,12 +162,15 @@ export function FloatingAssistant({ tab }: { tab: TabId }) {
     qa.ask(text, lang);
   };
 
+  const direct = health.status === 'direct';
   const statusText =
     health.status === 'up' && health.info
       ? x.statusUp(health.info.docs, health.info.passages)
-      : health.status === 'down'
-        ? x.statusDown
-        : x.statusChecking;
+      : direct
+        ? x.statusDirect
+        : health.status === 'down'
+          ? x.statusDown
+          : x.statusChecking;
   const lastQuestionBefore = (i: number) =>
     qa.messages
       .slice(0, i)
@@ -215,7 +218,12 @@ export function FloatingAssistant({ tab }: { tab: TabId }) {
               <h2 className="asst__title" id="asst-title">
                 {x.title}
               </h2>
-              <span className={`asst__status asst__status--${health.status}`} role="status" data-testid="assistant-status">
+              <span
+                className={`asst__status asst__status--${health.status}`}
+                role="status"
+                title={direct ? x.statusDirectTip : undefined}
+                data-testid="assistant-status"
+              >
                 <span className="asst__dot" aria-hidden="true" />
                 {statusText}
               </span>
@@ -311,7 +319,7 @@ export function FloatingAssistant({ tab }: { tab: TabId }) {
               >
                 {qa.messages.length === 0 && (
                   <div className="asst-welcome">
-                    <p className="asst-welcome__text">{x.welcome}</p>
+                    <p className="asst-welcome__text">{direct ? x.welcomeDirect : x.welcome}</p>
                     <p className="asst-welcome__label">{x.suggested(x.pages[tab])}</p>
                     <div className="asst-chips">
                       {ASSISTANT_SUGGESTIONS[tab].map((q) => (
@@ -343,7 +351,7 @@ export function FloatingAssistant({ tab }: { tab: TabId }) {
                         <i />
                         <i />
                       </span>
-                      {x.pending}
+                      {direct ? x.pendingDirect : x.pending}
                     </div>
                   </div>
                 )}

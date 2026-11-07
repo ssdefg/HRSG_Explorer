@@ -11,6 +11,7 @@ import {
   type QaCaseState,
 } from '@/lib/caseStore';
 import { deriveCalculator } from '@/lib/calculatorModel';
+import { askGeminiDirect, buildDirectUserText, hasDirectKey, parseGeminiResponse } from '@/lib/geminiDirect';
 import { computeProgress, computeReadiness } from '@/lib/checklistStats';
 import {
   CONTEXT_LIMITS,
@@ -196,4 +197,31 @@ test('[추천 질문] 화면마다 6개 · 첨부 질문 초안 존재', () => {
     assert.ok(ASK_DRAFT[tab].ko.includes('첨부'));
   }
   assert.notDeepEqual(ASSISTANT_SUGGESTIONS.dashboard, ASSISTANT_SUGGESTIONS.checklist);
+});
+
+test('Standalone 직결: 프롬프트 구성 · 응답 판정 · 키 없으면 호출하지 않음', async () => {
+  const text = buildDirectUserText('홍길동 010-1234-5678 핀치가 뭐야?', {
+    page: 'calculator',
+    title: '계산기',
+    items: [{ id: 'a', label: '출력 손실', value: 1.894, unit: 'MW' }],
+  } as never);
+  assert.ok(text.includes('[HRSG 일반 배경'));
+  assert.ok(text.includes('[현재 화면 데이터 — HRSG Explorer 앱 계산값, 문헌 아님] 계산기'));
+  assert.ok(text.includes('- 출력 손실: 1.894 MW'));
+  assert.ok(!text.includes('010-1234-5678'));
+
+  assert.deepEqual(parseGeminiResponse({ candidates: [{ content: { parts: [{ text: ' 답 ' }] }, finishReason: 'STOP' }], modelVersion: 'm1' }, 'm0'), {
+    answer: '답',
+    status: 'ok',
+    model: 'm1',
+  });
+  assert.equal(parseGeminiResponse({ promptFeedback: { blockReason: 'SAFETY' } }, 'm0').status, 'refusal');
+  assert.equal(parseGeminiResponse({ candidates: [{ finishReason: 'STOP' }] }, 'm0').status, 'error');
+
+  // 테스트 런너에는 import.meta.env 가 없다 → 키 없음 → 네트워크 호출 없이 unavailable
+  assert.equal(hasDirectKey(), false);
+  const r = await askGeminiDirect('q', 'ko');
+  assert.equal(r.llmStatus, 'unavailable');
+  assert.equal(r.mode, 'direct');
+  assert.deepEqual(r.sources, []);
 });

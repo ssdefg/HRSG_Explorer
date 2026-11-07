@@ -55,7 +55,9 @@ const TXT = {
     savedTip: '이 브라우저(localStorage)에 자동 저장됨',
     loseWarn: '저장되지 않았습니다 — 새로고침 시 변경 사항이 사라질 수 있습니다.',
     healthUp: '서버 정상',
-    healthDown: '서버 단절',
+    healthDown: 'Standalone 모드 · 키 미설정',
+    healthDirect: '온라인 (Standalone 모드)',
+    healthDirectTip: (t: string) => `검색 서버 응답 없음 → 브라우저에서 Gemini API 직접 호출 (참고문헌 검색 없음) · 마지막 확인 ${t}`,
     healthChecking: '서버 확인 중',
     healthTip: (t: string) => `30초마다 /api/health 확인 · 마지막 확인 ${t}`,
     demo: 'DEMO',
@@ -75,7 +77,9 @@ const TXT = {
     savedTip: 'Auto-saved in this browser (localStorage)',
     loseWarn: 'Not saved — changes may be lost on reload.',
     healthUp: 'Server OK',
-    healthDown: 'Server down',
+    healthDown: 'Standalone · key not set',
+    healthDirect: 'Online (Standalone mode)',
+    healthDirectTip: (t: string) => `No search server → the browser calls the Gemini API directly (no literature search) · last checked ${t}`,
     healthChecking: 'Checking server',
     healthTip: (t: string) => `Checks /api/health every 30 s · last checked ${t}`,
     demo: 'DEMO',
@@ -100,7 +104,8 @@ export function UtilityHeader({ active, navOpen, onMenu }: UtilityHeaderProps) {
   const tab = TABS.find((tb) => tb.id === active);
   const failed = cs.saveStatus === 'quota' || cs.saveStatus === 'unavailable' || cs.saveStatus === 'error';
   const saveTone = failed ? 'error' : cs.saveStatus === 'saved' ? 'ok' : 'idle';
-  const healthText = health.status === 'up' ? x.healthUp : health.status === 'down' ? x.healthDown : x.healthChecking;
+  const healthText =
+    health.status === 'up' ? x.healthUp : health.status === 'direct' ? x.healthDirect : health.status === 'down' ? x.healthDown : x.healthChecking;
   const checked = health.checkedAt ? health.checkedAt.toLocaleTimeString(lang === 'ko' ? 'ko-KR' : 'en-US', { hour12: false }) : '—';
 
   return (
@@ -148,7 +153,7 @@ export function UtilityHeader({ active, navOpen, onMenu }: UtilityHeaderProps) {
         <span
           className={`utilbar__health utilbar__health--${health.status}`}
           role="status"
-          title={x.healthTip(checked)}
+          title={health.status === 'direct' ? x.healthDirectTip(checked) : x.healthTip(checked)}
           data-testid="health-status"
         >
           <span className="utilbar__dot" aria-hidden="true" />

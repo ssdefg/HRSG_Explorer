@@ -1,12 +1,17 @@
 import { useSyncExternalStore } from 'react';
 import type { RagHealth } from '@/lib/ragClient';
+import { hasDirectKey } from '@/lib/geminiDirect';
 
 /** 헬스 체크 주기 [ms] — 가이드 §1.1 (30초 주기 /api/health 폴링) */
 export const HEALTH_INTERVAL_MS = 30_000;
 const HEALTH_TIMEOUT_MS = 5_000;
 
-/** checking: 첫 응답 전 · up: 서버/검색 인덱스 응답 정상 · down: 응답 없음·오류 */
-export type HealthStatus = 'checking' | 'up' | 'down';
+/**
+ * checking: 첫 응답 전 · up: 서버/검색 인덱스 응답 정상
+ * direct: 서버 응답은 없지만 Gemini 키가 빌드에 있어 브라우저에서 직결 (Standalone — 정적 사이트 단독 배포)
+ * down: 서버 응답 없음 · 직결 키도 없음 (또는 브라우저 오프라인)
+ */
+export type HealthStatus = 'checking' | 'up' | 'direct' | 'down';
 
 export interface HealthState {
   status: HealthStatus;
@@ -48,7 +53,12 @@ function set(next: HealthState) {
 }
 
 export function checkHealthNow(): void {
-  pingHealth().then((info) => set({ status: info ? 'up' : 'down', checkedAt: new Date(), info }));
+  pingHealth().then((info) => set({ status: info ? 'up' : hasDirectKey() ? 'direct' : 'down', checkedAt: new Date(), info }));
+}
+
+/** 지금 알고 있는 상태 — 질문을 보낼 때 RAG 서버를 건너뛸지 정한다 */
+export function currentHealthStatus(): HealthStatus {
+  return state.status;
 }
 
 const onOffline = () => set({ ...state, status: 'down', info: null });

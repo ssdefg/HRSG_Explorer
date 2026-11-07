@@ -39,6 +39,8 @@ export interface RagResult {
   sources: RagSource[];
   retrievalMs: number;
   llmMs?: number;
+  /** direct: RAG 서버 없이 브라우저에서 Gemini 직결 (근거 문단 없음). 없으면 RAG 서버 답변 */
+  mode?: 'rag' | 'direct';
 }
 
 export interface RagHealth {
@@ -81,6 +83,7 @@ export async function askRag(question: string, lang: Lang, context?: ContextSnap
     sources: d.sources,
     retrievalMs: d.retrieval_ms,
     llmMs: d.llm_ms ?? undefined,
+    mode: 'rag',
   };
 }
 

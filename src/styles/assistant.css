@@ -149,8 +149,9 @@
   text-overflow: ellipsis;
 }
 .asst__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
-.asst__status--up { color: var(--c-normal-ink); }
-.asst__status--down { color: var(--c-warning-ink); }
+.asst__status--up,
+.asst__status--direct { color: var(--c-normal-ink); }
+.asst__status--down { color: var(--c-ink-3); }
 .asst__tools { display: flex; gap: 2px; }
 .asst-icon {
   width: 32px;

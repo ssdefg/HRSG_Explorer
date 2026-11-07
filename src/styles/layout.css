@@ -271,9 +271,10 @@
 }
 /* 저장됨(녹색) · 저장 대기(회색) · 용량 초과/저장 불가(적색) */
 .utilbar__save--ok,
-.utilbar__health--up { color: var(--c-normal-ink); }
-.utilbar__save--error,
-.utilbar__health--down { color: var(--c-warning-ink); font-weight: 700; }
+.utilbar__health--up,
+.utilbar__health--direct { color: var(--c-normal-ink); }
+.utilbar__save--error { color: var(--c-warning-ink); font-weight: 700; }
+.utilbar__health--down { color: var(--c-ink-3); }
 .badge--demo-header { height: 18px; line-height: 16px; }
 
 .utilbar__tools {
@@ -433,8 +434,7 @@
   .utilbar__health {
     display: none;
   }
-  .utilbar__save--error,
-  .utilbar__health--down {
+  .utilbar__save--error {
     display: inline-flex;
   }
   .utilbar__case {

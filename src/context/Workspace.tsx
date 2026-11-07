@@ -48,7 +48,9 @@ import { parseNumericInput } from '@/lib/number';
 import { kitDefaultValues } from '@/lib/calc_adapter';
 import { maskSensitive } from '@/lib/privacy';
 import { CHECKLIST_CATEGORIES, CHECKLIST_ITEMS, type ChecklistCategory } from '@/data/checklistItems';
-import { askRag } from '@/lib/ragClient';
+import { askRag, RagUnavailableError, type RagResult } from '@/lib/ragClient';
+import { askGeminiDirect, hasDirectKey } from '@/lib/geminiDirect';
+import { currentHealthStatus } from '@/lib/useHealth';
 import type { EvaluationMode } from '@/lib/calc';
 
 export type { MeasuredEntry, QaMessage, AnalysisSnapshot, OperatingConditions, Conversation } from '@/lib/caseStore';
@@ -643,6 +645,18 @@ function maskContext(ctx: ContextSnapshot | undefined, names: string[]): Context
   };
 }
 
+/**
+ * RAG 서버(/api/ask)로 묻고, 서버가 없으면 브라우저에서 Gemini 로 직접 묻는다 (Standalone — 정적 사이트 단독 배포).
+ * 헬스 체크가 이미 'direct' 면 서버 요청을 건너뛴다. 둘 다 안 되면 예외 → '연결 오류 · 다시 시도'.
+ */
+function answerQuestion(text: string, lang: Lang, context?: ContextSnapshot): Promise<RagResult> {
+  if (currentHealthStatus() === 'direct') return askGeminiDirect(text, lang, context);
+  return askRag(text, lang, context).catch((e) => {
+    if (e instanceof RagUnavailableError && hasDirectKey()) return askGeminiDirect(text, lang, context);
+    throw e;
+  });
+}
+
 export function useQa(): QaState {
   const { current, updateCase } = useStore();
   const t = useTransient();
@@ -656,7 +670,7 @@ export function useQa(): QaState {
   const send = useCallback(
     (convId: string, text: string, lang: Lang, context?: ContextSnapshot) => {
       t.setQaPendingConv(convId);
-      askRag(text, lang, context)
+      answerQuestion(text, lang, context)
         .then((r) => updateCase(caseId, (c) => ({ ...c, qa: appendToConversation(c.qa, convId, (n, at) => [{ id: n, at, kind: 'rag', context, ...r }]) })))
         .catch(() =>
           updateCase(caseId, (c) => ({
