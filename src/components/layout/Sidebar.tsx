@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { TabId } from '@/types';
 import { TABS } from '@/data/tabs';
+import { hashFor } from '@/lib/useHashTab';
 import { useAppSettings } from '@/context/AppSettings';
 import { Logo } from './Logo';
 
@@ -45,7 +46,7 @@ export function Sidebar({ active, open, onClose }: SidebarProps) {
                   <a
                     ref={i === 0 ? firstLink : undefined}
                     id={`nav-${tab.id}`}
-                    href={`#/${tab.id}`}
+                    href={hashFor(tab.id)}
                     className={`side-link${selected ? ' is-active' : ''}`}
                     aria-current={selected ? 'page' : undefined}
                     onClick={onClose}

@@ -18,12 +18,12 @@ const TXT = {
     remove: '삭제',
     empty: '실측 데이터 미입력',
     emptyDesc: '현재 입력된 측정값이 없습니다. 화면의 모든 전후 비교 수치는 가상 시나리오입니다.',
-    errDay: `경과일은 −${VALIDATION_SCENARIO.daysBefore} ~ ${VALIDATION_SCENARIO.daysAfter} 사이의 정수이며 0(세정일)은 제외합니다.`,
+    errDay: `경과일은 −${VALIDATION_SCENARIO.daysBefore} ~ ${VALIDATION_SCENARIO.daysAfter} 사이의 정수입니다 (0 = 세정 당일).`,
     errVal: '배압 또는 배기가스 온도 중 하나 이상을 올바른 숫자로 입력하세요.',
     errBp: '배압은 0 ~ 1,000 mmH₂O 범위여야 합니다.',
     errTemp: '배기가스 온도는 0 ~ 400 °C 범위여야 합니다.',
     unverified: '검증 전 값 — 계측 위치·조건 확인 필요',
-    session: '입력값은 현재 브라우저 탭에서만 유지되며 저장·공유되지 않습니다.',
+    session: '입력값은 현재 케이스에 저장되며 이 브라우저에만 보관됩니다.',
   },
   en: {
     title: 'Measured data input',
@@ -36,12 +36,12 @@ const TXT = {
     remove: 'Remove',
     empty: 'No measured data',
     emptyDesc: 'No measurements entered. All pre/post figures on this screen are a mock scenario.',
-    errDay: `Day must be an integer between −${VALIDATION_SCENARIO.daysBefore} and ${VALIDATION_SCENARIO.daysAfter}, excluding 0 (cleaning day).`,
+    errDay: `Day must be an integer between −${VALIDATION_SCENARIO.daysBefore} and ${VALIDATION_SCENARIO.daysAfter}, (0 = cleaning day).`,
     errVal: 'Enter a valid number for back pressure and/or stack temperature.',
     errBp: 'Back pressure must be 0–1,000 mmH₂O.',
     errTemp: 'Stack temperature must be 0–400 °C.',
     unverified: 'Unverified — confirm sensor location and conditions',
-    session: 'Entries live only in this browser tab and are not saved or shared.',
+    session: 'Entries are saved in the current case, in this browser only.',
   },
 };
 
@@ -57,7 +57,7 @@ export function MeasuredInput() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const d = parseNumericInput(day, { min: -VALIDATION_SCENARIO.daysBefore, max: VALIDATION_SCENARIO.daysAfter });
-    if (!d.ok || !Number.isInteger(d.value) || d.value === 0) return setError(x.errDay);
+    if (!d.ok || !Number.isInteger(d.value)) return setError(x.errDay);
     const b = bp.trim() === '' ? null : parseNumericInput(bp, { min: 0, max: 1000 });
     const t = temp.trim() === '' ? null : parseNumericInput(temp, { min: 0, max: 400 });
     if (b === null && t === null) return setError(x.errVal);

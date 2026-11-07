@@ -15,6 +15,7 @@ import { HrsgDiagram } from '@/components/calculator/HrsgDiagram';
 import { PinchApproachPanel } from '@/components/calculator/PinchApproachPanel';
 import { CleaningComparison } from '@/components/calculator/CleaningComparison';
 import { DataInventory } from '@/components/calculator/DataInventory';
+import { StaleCover } from '@/components/calculator/StaleCover';
 
 /**
  * 성능·경제성 계산기 — 입력 · 계산 · 경제성 비교 · 차트. (세정 전후 상세 분석은 '세정 전후' 화면으로 이동)
@@ -41,7 +42,10 @@ export function CalculatorPage({ navCount }: { navCount: number }) {
       <CalculatorControls state={state} />
 
       <h3 className="section-title">{t.keyIndicators}</h3>
-      <CalculatorKpis state={state} />
+      {/* 입력 변경 후 재평가 전에는 결과를 블러 처리해 오래된 값을 읽지 않게 한다 (가이드 §2.3) */}
+      <StaleCover stale={state.stale} onRun={state.commit}>
+        <CalculatorKpis state={state} />
+      </StaleCover>
 
       <div className="calc-layout">
         <aside className="calc-layout__side">
@@ -49,15 +53,17 @@ export function CalculatorPage({ navCount }: { navCount: number }) {
         </aside>
 
         <div className="calc-layout__main">
+          <StaleCover stale={state.stale} onRun={state.commit}>
           <div className="section-grid">
             <BackpressureGauge state={state} />
             <CalculationResult state={state} />
             <PerformanceChart state={state} />
             <HrsgDiagram values={state.values} />
-            <PinchApproachPanel values={state.values} />
-            <CleaningComparison />
+            <PinchApproachPanel state={state} />
+            <CleaningComparison state={state} />
             <DataInventory state={state} />
           </div>
+          </StaleCover>
         </div>
       </div>
     </PageScaffold>

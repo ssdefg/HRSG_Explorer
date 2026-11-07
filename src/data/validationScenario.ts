@@ -6,8 +6,8 @@
  */
 
 export const VALIDATION_SCENARIO = {
-  backPressure: { before: 320, after: 245 }, // mmH₂O
-  exhaustTemp: { before: 135, after: 112 }, // °C
+  backPressure: { before: 350, after: 255 }, // mmH₂O
+  exhaustTemp: { before: 115, after: 104 }, // °C
   /** 시계열 구간 [일] — 세정일(0) 기준 */
   daysBefore: 30,
   daysAfter: 60,
@@ -42,8 +42,8 @@ export function buildScenarioSeries(): ScenarioPoint[] {
       const t = (d + s.daysBefore) / (s.daysBefore - 1); // 0 → 1
       pts.push({
         day: d,
-        backPressure: r(300 + 20 * t + wobble(d, 1) * 2.5),
-        exhaustTemp: r(131 + 4 * t + wobble(d, 2) * 0.8),
+        backPressure: r(s.backPressure.before - 20 + 20 * t + wobble(d, 1) * 2.5),
+        exhaustTemp: r(s.exhaustTemp.before - 4 + 4 * t + wobble(d, 2) * 0.8),
       });
     } else {
       const t = (d - 1) / (s.daysAfter - 1);

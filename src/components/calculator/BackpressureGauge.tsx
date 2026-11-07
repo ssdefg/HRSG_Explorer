@@ -2,7 +2,6 @@ import { Card, DataTypeBadges, StatusBadge } from '@/components/ui';
 import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber } from '@/lib/format';
-import { BP_THRESHOLDS } from '@/lib/calc';
 import type { CalculatorState } from '@/context/Workspace';
 import { LEVEL_STATUS, levelLabel } from './level';
 
@@ -12,8 +11,8 @@ const R = 96;
 const STROKE = 18;
 
 /** 게이지 최대 눈금 — 입력이 커져도 바늘이 범위를 벗어나지 않도록 50 단위로 올린다 */
-function gaugeMax(current: number | null, reference: number | null): number {
-  const base = Math.max(400, (current ?? 0) * 1.15, (reference ?? 0) * 1.2);
+function gaugeMax(current: number | null, reference: number | null, bandMax: number): number {
+  const base = Math.max(bandMax, (current ?? 0) * 1.1, (reference ?? 0) * 1.2);
   return Math.ceil(base / 50) * 50;
 }
 
@@ -23,25 +22,31 @@ function polar(value: number, max: number, radius = R) {
   return { x: CX + radius * Math.cos(angle), y: CY - radius * Math.sin(angle) };
 }
 
-function arc(from: number, to: number, max: number) {
-  const a = polar(from, max);
-  const b = polar(to, max);
-  return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${R} ${R} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
+function arc(from: number, to: number, max: number, radius = R) {
+  const a = polar(from, max, radius);
+  const b = polar(to, max, radius);
+  return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${radius} ${radius} 0 0 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
 }
+
+/** 상태 구간 띠 — 트랙 바깥의 얇은 띠 (정상·주의·위험 임계값 위치를 표시) */
+const ZONE_R = R + STROKE / 2 + 4;
+const ZONE_STROKE = 3;
 
 export function BackpressureGauge({ state }: { state: CalculatorState }) {
   const { lang } = useAppSettings();
   const c = useCalcText();
   const { currentBp, referenceBp, loadPct, exhaustTemp } = state.values;
   const deltaBp = state.metrics.deltaBp.value;
-  const level = state.level;
-  const max = gaugeMax(currentBp, referenceBp);
-  const n = (x: number | null) => (x === null ? '—' : formatNumber(x, lang, 0));
+  // 게이지는 GT 배압 하나만 보여 주므로 키트의 GT 배압 지표 판정을 쓴다 (종합 판정은 KPI 카드)
+  const level = state.kit.result?.indicators.gt_bp_mbar.level ?? null;
+  const bands = state.bands ?? { caution: 0, danger: 0, max: 0 };
+  const max = gaugeMax(currentBp, referenceBp, bands.max);
+  const n = (x: number | null) => (x === null ? '—' : formatNumber(x, lang, 1));
 
   const needle = currentBp !== null ? polar(currentBp, max, R - STROKE / 2 - 8) : null;
   const refIn = referenceBp !== null ? polar(referenceBp, max, R - STROKE / 2 - 4) : null;
-  const refOut = referenceBp !== null ? polar(referenceBp, max, R + STROKE / 2 + 4) : null;
-  const refLabel = referenceBp !== null ? polar(referenceBp, max, R + STROKE / 2 + 16) : null;
+  const refOut = referenceBp !== null ? polar(referenceBp, max, R + STROKE / 2 + 8) : null;
+  const refLabel = referenceBp !== null ? polar(referenceBp, max, R + STROKE / 2 + 18) : null;
 
   const ariaLabel = `${c.gaugeTitle}: ${c.gaugeCurrent} ${n(currentBp)} mmH₂O, ${c.gaugeReference} ${n(referenceBp)} mmH₂O${
     level ? `, ${levelLabel(level, c)}` : ''
@@ -55,15 +60,19 @@ export function BackpressureGauge({ state }: { state: CalculatorState }) {
     >
       <div className="gauge">
         <svg className="gauge__svg" viewBox="0 0 240 150" role="img" aria-label={ariaLabel}>
+          {/* 미채움 트랙(그레이) + 현재 값까지 오렌지 채움 */}
           <path d={arc(0, max, max)} className="gauge__track" strokeWidth={STROKE} fill="none" />
-          <path d={arc(0, BP_THRESHOLDS.caution, max)} className="gauge__zone gauge__zone--normal" strokeWidth={STROKE} fill="none" />
+          {currentBp !== null && currentBp > 0 && (
+            <path d={arc(0, Math.min(currentBp, max), max)} className="gauge__fill" strokeWidth={STROKE} fill="none" />
+          )}
+          <path d={arc(0, bands.caution, max, ZONE_R)} className="gauge__zone gauge__zone--normal" strokeWidth={ZONE_STROKE} fill="none" />
           <path
-            d={arc(BP_THRESHOLDS.caution, BP_THRESHOLDS.danger, max)}
+            d={arc(bands.caution, bands.danger, max, ZONE_R)}
             className="gauge__zone gauge__zone--caution"
-            strokeWidth={STROKE}
+            strokeWidth={ZONE_STROKE}
             fill="none"
           />
-          <path d={arc(BP_THRESHOLDS.danger, max, max)} className="gauge__zone gauge__zone--danger" strokeWidth={STROKE} fill="none" />
+          <path d={arc(bands.danger, max, max, ZONE_R)} className="gauge__zone gauge__zone--danger" strokeWidth={ZONE_STROKE} fill="none" />
 
           {refIn && refOut && refLabel && (
             <g className="gauge__ref">
@@ -112,7 +121,7 @@ export function BackpressureGauge({ state }: { state: CalculatorState }) {
         </div>
       </div>
 
-      <p className="note">{c.gaugeThresholds}</p>
+      {state.bands && <p className="note">{c.gaugeThresholds(state.bands.caution, state.bands.danger)}</p>}
       <p className="note note--warn">{c.gaugeDisclaimer}</p>
 
       {/* 판단에 추가로 필요한 데이터 — 기본 접힘 (임계값 안내·면책 문구는 위에 그대로 표시) */}

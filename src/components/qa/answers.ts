@@ -3,8 +3,11 @@ import type { QaAnswerId } from '@/data/qaPresets';
 import type { AnalysisSnapshot, CalculatorState, ChecklistState, MeasurementState } from '@/context/Workspace';
 import type { MetricId } from '@/lib/calculatorModel';
 import { formatNumber } from '@/lib/format';
-import { POWER_LOSS_COEFF_MW_PER_MMH2O as K, BP_THRESHOLDS } from '@/lib/calc';
-import { MOCK_CLEANING_METHODS } from '@/data/mockCleaning';
+import { KIT_CALC_DATA } from '@/lib/kit';
+
+/** 키트 손실 계수 문구 — 계수를 문자열로 하드코딩하지 않는다 */
+const KC = KIT_CALC_DATA.constants;
+const K = `${KC.gt_loss_pct_per_mbar} %/mbar (GT) · ${KC.st_loss_pct_per_c} %/°C (ST)`;
 import { VALIDATION_SCENARIO } from '@/data/validationScenario';
 import { REQUIRED_ITEM_IDS } from '@/data/checklistItems';
 import { SCENARIO_LABEL } from '@/data/calculatorInputs';
@@ -116,7 +119,7 @@ function cleaningFacts(ctx: AnswerContext): AnswerFact[] {
   const won = ko ? '원' : 'KRW';
   return [
     inputFact(ctx, ko ? '회수 출력 (가정)' : 'Recovered output (assumed)', ctx.calc.values.recoveredPowerMw, 'MW', 2),
-    metricFact(ctx, 'additionalRevenueKrw', ko ? '추가 발전 매출 (첫 1개월)' : 'Additional revenue (first month)', won, 0),
+    metricFact(ctx, 'monthlyIncrementalBenefitKrw', ko ? '월간 추가 편익' : 'Monthly added benefit', won, 0),
     metricFact(ctx, 'initialInvestmentKrw', ko ? '초기 투자' : 'Initial investment', won, 0),
     metricFact(ctx, 'netBenefitKrw', ko ? '세정 순편익 (첫 1개월)' : 'Net benefit (first month)', won, 0),
     metricFact(ctx, 'paybackMonths', ko ? '단순 회수 기간' : 'Simple payback', ko ? '개월' : 'months', 2),
@@ -144,9 +147,9 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
         basis: [
           T('가스터빈은 출구 압력이 높을수록 팽창비가 줄어 같은 연료로 낼 수 있는 출력이 감소하는 경향이 있습니다.', 'A higher turbine exit pressure reduces the expansion ratio, so output for the same fuel tends to drop.'),
           T('튜브 표면 파울링은 가스 흐름 저항을 키우는 동시에 열전달을 떨어뜨려, 배기가스 출구 온도 상승이나 증기 생산량 감소로 함께 나타날 수 있습니다.', 'Tube fouling increases flow resistance and reduces heat transfer, so it can also show as higher stack temperature or lower steam output.'),
-          T(`이 프로토타입의 손실 수치는 초과분 × ${K} MW/mmH₂O의 임시 계수를 쓴 예시 계산이며 실제 발전 손실이 아닙니다. 영향 크기는 설비 설계·부하·대기 조건에 따라 달라집니다.`, `Loss figures here use a provisional ${K} MW/mmH₂O coefficient (example calc), not actual losses. Magnitude depends on design, load and ambient conditions.`),
+          T(`이 프로토타입의 손실 수치는 키트의 임시 계수(${K})를 쓴 예시 계산이며 실제 발전 손실이 아닙니다. 영향 크기는 설비 설계·부하·대기 조건에 따라 달라집니다.`, `Loss figures here use the kit's provisional coefficients (${K}) (example calc), not actual losses. Magnitude depends on design, load and ambient conditions.`),
         ],
-        needs: need('b-bp-dp', 'a-gt-load', 'a-exh-temp', 'b-ref-cond', 'c-history'),
+        needs: need('A-02', 'A-03', 'A-01', 'B-01', 'C-01'),
         sources: ['unregistered', 'general', 'calcInputs', 'engine'],
         links: [{ tab: 'calculator' }, { tab: 'checklist' }],
       };
@@ -169,7 +172,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
           T('파울링 여부는 차압 단독이 아니라 배기가스 온도, 증기 생산량, 정비 이력과 함께 판단합니다.', 'Fouling should be judged with stack temperature, steam production and maintenance history, not ΔP alone.'),
           T('이 프로토타입에는 차압으로 손실을 계산하는 모델이 없습니다 — 차압은 표시·기록용 입력입니다.', 'This prototype has no model that converts ΔP into loss — ΔP is a display/record input.'),
         ],
-        needs: need('b-bp-dp', 'a-exh-flow', 'a-load-cond', 'c-history', 'c-maint'),
+        needs: need('A-02', 'A-03', 'A-04', 'C-02', 'C-08'),
         sources: ['unregistered', 'general', 'calcInputs'],
         links: [{ tab: 'calculator' }, { tab: 'checklist' }],
       };
@@ -196,7 +199,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
           T('전열면 오염은 열전달 계수를 낮춰 같은 가스 유량에서 출구 온도를 높이는 방향으로 작용합니다.', 'Fouled surfaces lower the heat-transfer coefficient, raising the outlet temperature for the same gas flow.'),
           T('온도 비교는 부하·대기 온도가 비슷한 구간끼리 해야 하며, 계측 위치도 확인해야 합니다.', 'Compare temperatures only across periods with similar load and ambient temperature, and confirm sensor location.'),
         ],
-        needs: need('b-gas-io', 'a-exh-temp', 'a-load-cond', 'c-pre'),
+        needs: need('B-06', 'B-01', 'A-04', 'C-01'),
         sources: ['unregistered', 'general', 'calcInputs', 'scenario'],
         links: [{ tab: 'validation', section: SECTION_IDS.validation, label: T('세정 전후 상세 분석', 'Pre/post analysis') }, { tab: 'checklist' }],
       };
@@ -215,7 +218,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
           T('두 경로의 기여도는 부착물 성상과 위치(섹션)에 따라 다르며, 이 프로토타입은 이를 분리해 계산하지 않습니다.', 'The share of each path depends on deposit type and location; this prototype does not separate them.'),
           T('세정 효과는 세정 전후를 같은 조건에서 비교해야 확인할 수 있습니다.', 'Cleaning effect can only be confirmed by comparing pre/post periods under the same conditions.'),
         ],
-        needs: need('b-bp-dp', 'b-gas-io', 'c-pre', 'c-post', 'c-history'),
+        needs: need('A-02', 'B-06', 'C-01', 'B-01', 'C-02'),
         sources: ['unregistered', 'general', 'calcInputs'],
         links: [{ tab: 'calculator' }, { tab: 'checklist' }],
       };
@@ -230,17 +233,20 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
           ),
           T('효과와 적합성은 부착물 성상, 튜브·핀 접근성, 작업·정지 시간에 따라 달라지므로 어느 공법이 우월하다고 단정할 수 없습니다.', 'Effectiveness depends on deposit type, access and work/outage time, so no method can be declared superior.'),
         ],
-        facts: MOCK_CLEANING_METHODS.map((m) => ({
-          label: `${m.label[lang]} · ${T('세정 비용 / 월간 편익', 'cost / monthly benefit')}`,
-          value: `${formatNumber(m.costKrw, lang, 0)} / ${formatNumber(m.monthlyBenefitKrw, lang, 0)} ${won}`,
-          types: ['mock'] as DataType[],
+        // 계산기 공법 비교와 같은 키트 compareMethods 결과 (드라이아이스 = 화면 입력, 나머지 = 키트 데이터)
+        facts: ctx.calc.kit.methods.map((m) => ({
+          label: `${m.name} · ${T('총투자 / 월간 편익', 'investment / monthly benefit')}`,
+          value: m.available
+            ? `${formatNumber(m.total_investment_krw ?? 0, lang, 0)} / ${formatNumber(m.monthly_benefit_krw ?? 0, lang, 0)} ${won}`
+            : (m.message ?? '—'),
+          types: ['mock', 'example'] as DataType[],
         })),
-        factsCaption: T('계산기 세정 공법 비교와 동일한 가상 데이터 — 실제 견적 아님', 'Same mock data as the calculator comparison — not real quotes'),
+        factsCaption: T('계산기 세정 공법 비교와 같은 키트 DEMO 데이터 — 실제 견적 아님', 'Same kit DEMO data as the calculator comparison — not real quotes'),
         basis: [
           T('공법별 비교는 같은 오염 상태·같은 범위의 작업을 전제로 해야 의미가 있습니다.', 'Comparisons are meaningful only for the same fouling state and work scope.'),
           T('업체명·상표명이 아닌 일반 공법 명칭으로만 비교합니다.', 'Only generic method names are used, not vendor or brand names.'),
         ],
-        needs: need('c-method', 'c-cost', 'c-downtime', 'c-history'),
+        needs: need('C-02', 'C-05', 'C-03'),
         sources: ['unregistered', 'general', 'cleaningMock'],
         links: [{ tab: 'calculator' }],
       };
@@ -260,7 +266,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
           T('정지 시간은 유효 가동시간에서 빠지고(회수 출력 없음), 정지 손실은 기저 출력의 기회비용으로 한 번만 반영합니다.', 'Shutdown time is excluded from effective hours (no recovered output); shutdown loss is counted once as the base-output opportunity cost.'),
           T('회수 출력은 입력 가정값이며 배압 기반 손실 추정치와 같은 값으로 취급하지 않습니다.', 'Recovered output is an input assumption, not treated as the BP-based loss estimate.'),
         ],
-        needs: need('c-cost', 'c-downtime', 'c-method', 'c-compare'),
+        needs: need('C-05', 'C-03', 'C-02', 'C-07'),
         sources: ['unregistered', 'calcInputs', 'engine', 'cleaningMock'],
         links: [{ tab: 'calculator', section: SECTION_IDS.economics, label: T('계산 결과 (경제성)', 'Calculation result (economics)') }],
       };
@@ -276,7 +282,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
         facts: cleaningFacts(ctx),
         factsCaption: caption(ctx),
         basis: [T('회수 출력이 실측으로 확인되지 않으면 순편익과 회수 기간도 예시 계산에 머뭅니다.', 'Without measured recovered output, net benefit and payback remain example calculations.')],
-        needs: need('c-cost', 'c-downtime', 'a-hours-mode', 'a-gt-load', 'c-pre', 'c-post'),
+        needs: need('C-05', 'C-03', 'A-05', 'A-01', 'C-02', 'C-01'),
         sources: ['unregistered', 'calcInputs', 'engine'],
         links: [{ tab: 'calculator', section: SECTION_IDS.economics, label: T('계산 결과 (경제성)', 'Calculation result (economics)') }, { tab: 'checklist' }],
       };
@@ -305,7 +311,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
           T('포화온도는 드럼 압력으로부터 증기표 등 물성 기준으로 구해야 하며, 기준 버전과 보정 방법을 먼저 정해야 합니다.', 'Saturation temperature must come from drum pressure via a property basis (e.g., steam tables); the version and corrections must be agreed first.'),
           T('설계값과 비교하려면 제작사 설계 기준이 필요합니다.', 'Comparison to design requires the OEM design basis.'),
         ],
-        needs: need('b-pinch', 'b-approach', 'b-drum-p', 'b-fw-temp', 'b-gas-io'),
+        needs: need('B-07', 'B-08', 'B-02', 'B-05', 'B-06'),
         sources: ['unregistered', 'general', 'calcInputs'],
         links: [{ tab: 'calculator' }, { tab: 'checklist' }],
       };
@@ -347,7 +353,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
         facts: [
           { label: T('데이터 수령률', 'Receipt rate'), value: `${checklist.summary.receivedCount} / ${checklist.summary.total} (${formatNumber(checklist.summary.receivedPct, lang, 0)}%)`, types: [] },
           { label: T('검토 진행률', 'Review progress'), value: `${checklist.summary.reviewedCount} / ${checklist.summary.total} (${formatNumber(checklist.summary.reviewPct, lang, 0)}%)`, types: [] },
-          { label: T('요청 필요 항목', 'Request-needed items'), value: String(checklist.summary.byStatus.requestNeeded), types: [] },
+          { label: T('요청 필요 항목', 'Request-needed items'), value: String(checklist.summary.byStatus.requested), types: [] },
         ],
         factsCaption: T('현재 케이스 체크리스트', 'Current case checklist'),
         basis: [
@@ -405,7 +411,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
             `≥${VALIDATION_SCENARIO.daysBefore} days pre and ≥${VALIDATION_SCENARIO.daysAfter} days post time series are needed to see re-fouling trends.`,
           ),
         ],
-        needs: need('c-pre', 'c-post', 'a-load-cond', 'b-bp-dp', 'b-gas-io', 'c-cost', 'c-downtime'),
+        needs: need('C-01', 'B-01', 'A-04', 'A-02', 'B-06', 'C-05', 'C-03'),
         sources: ['unregistered', 'scenario', 'engine'],
         links: [{ tab: 'validation', section: SECTION_IDS.validation, label: T('세정 전후 상세 분석', 'Pre/post analysis') }, { tab: 'checklist' }],
       };
@@ -447,7 +453,7 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
               types: snap.bp.monthlyLossKrw === null ? ['planned'] : ['example'],
               status: snap.bp.monthlyLossKrw === null ? heldStatus : undefined,
             },
-            { label: T('추가 발전 매출 (첫 1개월)', 'Additional revenue (first month)'), value: fmt(snap.cleaning.additionalRevenueKrw, 0, won), types: ['example'] },
+            { label: T('월간 추가 편익', 'Monthly added benefit'), value: fmt(snap.cleaning.monthlyIncrementalBenefitKrw, 0, won), types: ['example'] },
             { label: T('세정 순편익 (첫 1개월)', 'Net benefit (first month)'), value: fmt(snap.cleaning.netBenefitKrw, 0, won), types: ['example'] },
             {
               label: T('단순 회수 기간', 'Simple payback'),
@@ -468,12 +474,12 @@ export function buildAnswer(id: QaAnswerId, ctx: AnswerContext): AnswerContent {
       return {
         summary: [
           T(
-            `계산 결과 스냅샷 #${snap.seq}(${snap.model}, ${when})은 ${snap.mode === 'demo' ? 'DEMO 시나리오' : '사용자 입력'}의 예시 계산입니다. 배압 기반 손실은 임시 계수(${K} MW/mmH₂O)를 쓴 값이고, 회수 출력·순편익은 입력 가정값에 따른 산술 결과로 실제 설비 평가 결과가 아닙니다.`,
-            `Snapshot #${snap.seq} (${snap.model}, ${when}) is an example calculation in ${snap.mode === 'demo' ? 'DEMO scenario' : 'user-input'} mode. BP-based loss uses a provisional ${K} MW/mmH₂O coefficient; recovered output and net benefit are arithmetic on input assumptions — not an actual plant evaluation.`,
+            `계산 결과 스냅샷 #${snap.seq}(${snap.model}, ${when})은 ${snap.mode === 'demo' ? 'DEMO 시나리오' : '사용자 입력'}의 예시 계산입니다. 출력 손실은 키트 임시 계수(${K})를 쓴 값이고, 회수 출력·순편익은 입력 가정값에 따른 산술 결과로 실제 설비 평가 결과가 아닙니다.`,
+            `Snapshot #${snap.seq} (${snap.model}, ${when}) is an example calculation in ${snap.mode === 'demo' ? 'DEMO scenario' : 'user-input'} mode. power loss uses the kit's provisional coefficients (${K}); recovered output and net benefit are arithmetic on input assumptions — not an actual plant evaluation.`,
           ),
           elevated
-            ? T(`배압이 시연용 임계값(${BP_THRESHOLDS.caution} mmH₂O 이상)에 해당하지만, 이것만으로 세정이 필요하다고 확정하지 않습니다.`, `Back pressure is at or above the demo threshold (${BP_THRESHOLDS.caution} mmH₂O), but this alone does not confirm cleaning is needed.`)
-            : T('배압은 시연용 정상 범위입니다. 이 역시 세정 불필요를 확정하지 않습니다.', 'Back pressure is in the demo normal range; this does not confirm cleaning is unnecessary either.'),
+            ? T('키트 지표(GT 배압·HRSG 차압·스택 온도) 중 주의 이상 구간이 있지만, 이것만으로 세정이 필요하다고 확정하지 않습니다.', 'A kit indicator (GT BP, HRSG ΔP or stack) is in a caution band or worse, but this alone does not confirm cleaning is needed.')
+            : T('키트 지표가 모두 정상 구간입니다. 이 역시 세정 불필요를 확정하지 않습니다.', 'All kit indicators are in the normal band; this does not confirm cleaning is unnecessary either.'),
         ],
         facts,
         factsCaption: stale ? undefined : T(`스냅샷 #${snap.seq} 기준 (현재 입력과 동일)`, `Snapshot #${snap.seq} (matches current inputs)`),

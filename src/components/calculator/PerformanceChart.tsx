@@ -1,7 +1,7 @@
 import {
+  Area,
+  ComposedChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ReferenceArea,
   ReferenceDot,
   ReferenceLine,
@@ -15,50 +15,52 @@ import { Card, DataTypeBadges, StatusBadge } from '@/components/ui';
 import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber } from '@/lib/format';
-import { BP_THRESHOLDS, buildLossSensitivity, classifyBackpressure } from '@/lib/calc';
+import { classifyBackpressure } from '@/lib/calc';
+import { kitLossCurve } from '@/lib/calc_adapter';
 import type { CalculatorState } from '@/context/Workspace';
 import { LEVEL_STATUS, levelLabel } from './level';
 
 const AXIS_TICK = { fill: 'var(--c-ink-3)', fontSize: 11 };
 
-function chartRange(current: number | null, reference: number | null) {
-  const lo = Math.min(200, reference ?? 200, current ?? 200);
-  const hi = Math.max(400, (current ?? 0) + 50, (reference ?? 0) + 100);
-  const from = Math.max(0, Math.floor((lo - 20) / 50) * 50);
-  const to = Math.ceil(hi / 50) * 50;
-  const step = Math.max(5, Math.ceil((to - from) / 120 / 5) * 5);
-  return { from, to, step };
+/** 눈금 간격 — 범위에 따라 25·50·100 mmH₂O */
+function tickStep(span: number): number {
+  return span <= 150 ? 25 : span <= 400 ? 50 : 100;
 }
 
 export function PerformanceChart({ state }: { state: CalculatorState }) {
   const { lang } = useAppSettings();
   const c = useCalcText();
   const { currentBp, referenceBp, operatingHours, smp, exhaustTemp, capacityMw, loadPct } = state.values;
+  const bands = state.bands;
   const m = state.metrics;
   const monthlyLossKrw = m.monthlyLossKrw.value;
   const powerLossMw = m.powerLossMw.value;
   const outputMw = state.bp.outputMw;
   const lossSharePct = m.powerLossMw.status === 'ok' ? state.bp.lossSharePct : null;
-  // 사용자 입력 모드: 배압→손실 계수(0.015)가 검증된 모델이 아니므로 곡선을 그리지 않는다
-  const modelBlocked = state.mode === 'user';
-
-  const { from, to, step } = chartRange(currentBp, referenceBp);
-  const ticks = Array.from({ length: Math.floor((to - from) / 50) + 1 }, (_, i) => from + i * 50);
-  const data = modelBlocked ? [] : buildLossSensitivity(referenceBp, operatingHours, smp, from, to, step);
+  // 키트 lossCurve(GT 배압만 min~max 로 변화) — 손실 MW 를 키트 월간 금액식(MW × 월간 가동시간 × 원/MWh)으로 백만원 환산
+  const curve = kitLossCurve(state.kit.run);
+  const data =
+    operatingHours === null || smp === null
+      ? []
+      : curve.map((p) => ({ bp: p.bp, monthlyLossMillionKrw: (p.lossMw * operatingHours * smp * 1000) / 1e6 }));
+  const from = data.length ? Math.floor(data[0].bp / 25) * 25 : 0;
+  const to = data.length ? Math.ceil(data[data.length - 1].bp / 25) * 25 : 0;
+  const tStep = tickStep(to - from);
+  const ticks = Array.from({ length: Math.floor((to - from) / tStep) + 1 }, (_, i) => from + i * tStep);
   const currentLossM = monthlyLossKrw === null ? null : monthlyLossKrw / 1e6;
   const n = (x: number | null, d = 0) => (x === null ? '—' : formatNumber(x, lang, d));
 
   const renderTooltip = ({ active, payload }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
     const p = payload[0].payload as { bp: number; monthlyLossMillionKrw: number };
-    const lvl = classifyBackpressure(p.bp);
+    const lvl = classifyBackpressure(p.bp, bands);
     return (
       <div className="chart-tip">
         <div className="chart-tip__head">
           {c.chartXAxis}: <strong className="num">{formatNumber(p.bp, lang, 0)}</strong>
         </div>
         <div className="chart-tip__row">
-          <span className="chart-tip__swatch chart-tip__swatch--series" aria-hidden="true" />
+          <span className="chart-tip__swatch chart-tip__swatch--main" aria-hidden="true" />
           {c.chartSeries}: <strong className="num">{formatNumber(p.monthlyLossMillionKrw, lang, 1)}</strong> {c.million}
         </div>
         {lvl && <StatusBadge status={LEVEL_STATUS[lvl]} label={levelLabel(lvl, c)} />}
@@ -86,7 +88,7 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
         <div className="cond-strip__item">
           <dt>{c.stepPower}</dt>
           <dd>
-            <span className="num">{n(powerLossMw, 2)}</span> <small>MW</small>
+            <span className="num">{n(powerLossMw, 3)}</span> <small>MW</small>
           </dd>
           <span className="cond-strip__sub">
             {c.lossShare} <span className="num">{n(lossSharePct, 2)}%</span>
@@ -113,22 +115,28 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
       </dl>
 
       {data.length === 0 ? (
-        <p className="chart-empty">{modelBlocked ? c.chartModel : c.chartEmpty}</p>
+        <p className="chart-empty">{c.chartEmpty}</p>
       ) : (
         <>
           <div className="chart-box" role="img" aria-label={`${c.chartTitle} — ${c.chartSubtitle}`}>
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={data} margin={{ top: 8, right: 16, bottom: 22, left: 4 }}>
-                <ReferenceArea x1={from} x2={BP_THRESHOLDS.caution} fill="var(--c-normal)" fillOpacity={0.07} ifOverflow="hidden" />
+              <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 22, left: 4 }}>
+                <defs>
+                  <linearGradient id="perf-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--c-chart-main)" stopOpacity={0.28} />
+                    <stop offset="100%" stopColor="var(--c-chart-main)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <ReferenceArea x1={from} x2={bands?.caution ?? from} fill="var(--c-normal)" fillOpacity={0.07} ifOverflow="hidden" />
                 <ReferenceArea
-                  x1={BP_THRESHOLDS.caution}
-                  x2={BP_THRESHOLDS.danger}
+                  x1={bands?.caution ?? from}
+                  x2={bands?.danger ?? from}
                   fill="var(--c-caution)"
                   fillOpacity={0.1}
                   ifOverflow="hidden"
                 />
-                <ReferenceArea x1={BP_THRESHOLDS.danger} x2={to} fill="var(--c-warning)" fillOpacity={0.07} ifOverflow="hidden" />
-                <CartesianGrid stroke="var(--c-line)" vertical={false} />
+                <ReferenceArea x1={bands?.danger ?? to} x2={to} fill="var(--c-warning)" fillOpacity={0.07} ifOverflow="hidden" />
+                <CartesianGrid stroke="var(--c-chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="bp"
                   type="number"
@@ -165,12 +173,14 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
                     label={{ value: `${c.gaugeReference} ${n(referenceBp)}`, position: 'insideTopRight', offset: 6, fill: 'var(--c-ink-2)', fontSize: 11 }}
                   />
                 )}
-                <Line
+                {/* 메인 라인 — 오렌지 + 위에서 아래로 사라지는 영역 채움 */}
+                <Area
                   type="linear"
                   dataKey="monthlyLossMillionKrw"
                   name={c.chartSeries}
-                  stroke="var(--c-chart-2)"
-                  strokeWidth={2}
+                  stroke="var(--c-chart-main)"
+                  strokeWidth={2.5}
+                  fill="url(#perf-fill)"
                   dot={false}
                   activeDot={{ r: 5, stroke: 'var(--c-surface)', strokeWidth: 2 }}
                   isAnimationActive={false}
@@ -179,7 +189,7 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
                   <>
                     <ReferenceLine
                       x={currentBp}
-                      stroke="var(--c-accent)"
+                      stroke="var(--c-ink-2)"
                       strokeWidth={1.5}
                       ifOverflow="extendDomain"
                       label={{ value: `${c.gaugeCurrent} ${n(currentBp)}`, position: 'insideTopLeft', offset: 6, fill: 'var(--c-accent-ink)', fontSize: 11, fontWeight: 600 }}
@@ -195,12 +205,12 @@ export function PerformanceChart({ state }: { state: CalculatorState }) {
                     />
                   </>
                 )}
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="chart-key">
             <span className="chart-key__item">
-              <span className="chart-key__line chart-key__line--series" aria-hidden="true" />
+              <span className="chart-key__line chart-key__line--main" aria-hidden="true" />
               {c.chartSeries}
             </span>
             <span className="chart-key__item">

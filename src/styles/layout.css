@@ -55,7 +55,7 @@
   height: 34px;
 }
 
-/* Logo — 사이드바(navy) 위의 밝은 선 + 브랜드 오렌지 열 흐름 */
+/* Logo — 사이드바 글자색 선 + 브랜드 오렌지 열 흐름 (라이트/다크 공통) */
 .logo__frame {
   fill: var(--c-header-ink);
   fill-opacity: 0.06;
@@ -129,21 +129,20 @@
 }
 
 .side-link.is-active {
-  color: var(--c-header-ink);
+  color: var(--c-nav-active-ink);
   font-weight: 600;
   background: var(--c-header-active);
 }
 
-/* 활성 메뉴 — 2px 오렌지 인디케이터 라인 */
-.side-link.is-active::before {
+/* 활성 메뉴 — 오른쪽 오렌지 도트 */
+.side-link.is-active::after {
   content: '';
-  position: absolute;
-  left: -8px;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: var(--c-accent);
+  flex: none;
 }
 
 .side-link.is-active .side-link__num {
@@ -254,16 +253,28 @@
   color: var(--c-ink-3);
 }
 
-.utilbar__save {
+.utilbar__save,
+.utilbar__health {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
+  font-weight: 600;
   color: var(--c-ink-3);
   white-space: nowrap;
 }
-
-.utilbar__save.is-error {
-  color: var(--c-warning-ink);
-  font-weight: 700;
+.utilbar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
+/* 저장됨(녹색) · 저장 대기(회색) · 용량 초과/저장 불가(적색) */
+.utilbar__save--ok,
+.utilbar__health--up { color: var(--c-normal-ink); }
+.utilbar__save--error,
+.utilbar__health--down { color: var(--c-warning-ink); font-weight: 700; }
+.badge--demo-header { height: 18px; line-height: 16px; }
 
 .utilbar__tools {
   display: flex;
@@ -418,8 +429,13 @@
     padding-block: var(--sp-2);
   }
   .utilbar__menu-text,
-  .utilbar__save {
+  .utilbar__save,
+  .utilbar__health {
     display: none;
+  }
+  .utilbar__save--error,
+  .utilbar__health--down {
+    display: inline-flex;
   }
   .utilbar__case {
     margin-left: 0;
@@ -440,3 +456,19 @@
     font-size: 1.3rem;
   }
 }
+
+/* 다크/라이트 전환 (해/달 아이콘) */
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  color: var(--c-ink-2);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+.theme-toggle:hover { color: var(--c-accent-ink); border-color: var(--c-accent); }
+.theme-toggle:focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }

@@ -17,6 +17,7 @@
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -52,13 +53,38 @@ TOP_K = 8
 # 안전 필터 등으로 답변이 막힌 경우
 BLOCKED_FINISH = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATION", "IMAGE_SAFETY"}
 
+# 가이드 §3.2 — 전화번호·이메일·발전소 고유 명칭 마스킹 (프론트엔드 src/lib/privacy.ts 와 같은 규칙, 서버 측 이중 방어)
+MASK = "[마스킹]"
+_MASK_RES = [
+    re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"),
+    re.compile(r"(?<!\d)01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)"),
+    re.compile(r"(?<!\d)0(?:2|[3-6][1-5]|70)[-.\s)]?\d{3,4}[-.\s]?\d{4}(?!\d)"),
+    re.compile(r"\+\d{1,3}[-.\s]?\d{1,4}[-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)"),
+]
+_PLANT_RE = re.compile(r"([가-힣A-Za-z0-9]{1,15}?)(복합화력|화력|복합)?(발전소|발전본부|발전처|화력본부)")
+_GENERIC = {"복합", "화력", "복합화력", "원자력", "수력", "양수", "태양광", "풍력", "열병합", "가스", "석탄", "LNG", "해당", "우리", "이", "그", "각",
+            "국내", "해외", "전체", "대상", "기존", "신규", "일반", "모든", "여러", "전국"}
+
+
+def mask_sensitive(text: str) -> str:
+    for r in _MASK_RES:
+        text = r.sub(MASK, text)
+    def plant(m: re.Match) -> str:
+        head = m.group(1) + (m.group(2) or "")
+        return m.group(0) if m.group(1) in _GENERIC or head in _GENERIC else MASK
+    return _PLANT_RE.sub(plant, text)
+
+
 SYSTEM_PROMPT = """You are a technical assistant for combined-cycle power plant engineers working on HRSG (heat recovery steam generator) maintenance.
 Answer the question using the numbered reference passages provided in the user's message. They are excerpts from HRSG papers, standards and technical reports.
 
 - Base every factual statement on the passages and cite them inline with their numbers, e.g. [1] or [2][5].
+- The message may include a block "[현재 화면 데이터]" with values from the HRSG Explorer app (mock data and example calculations, not literature).
+  Use those values only to relate the literature to the user's current case, call them "앱 계산값" / "app values", never cite them with [n],
+  and do not present them as measured or validated plant data.
 - If the passages do not contain enough information to answer, say so plainly and state what is missing. Do not fill gaps from general knowledge without labelling it as such.
 - Passages are text extracted from PDFs and may contain broken equations or table fragments; do not over-interpret them.
-- Reply in the language of the question (Korean or English). Write plain text in short paragraphs; you may use "- " bullet lines. No Markdown headings, bold or tables.
+- Reply in the language of the question (Korean or English). Use short paragraphs; you may use "- " bullet lines, numbered steps and **bold** for key terms. No tables.
 - Keep the answer focused: usually 3-8 sentences."""
 
 
@@ -71,6 +97,11 @@ async def lifespan(app: FastAPI):
     app.state.search_lock = threading.Lock()  # 동시 요청 시 CPU 추론이 스레드끼리 코어를 다투지 않게 직렬화
     doc_map = json.loads((ROOT / "rag" / "doc_map.json").read_text(encoding="utf-8"))
     app.state.doc_files = {k: v["file"] for k, v in doc_map.items()}
+    # 근거 카드용 서지 (scripts/build_bibliography.py) — 없으면 파일명만 표시
+    bib_path = ROOT / "rag" / "bibliography.json"
+    app.state.bibliography = json.loads(bib_path.read_text(encoding="utf-8")) if bib_path.exists() else {}
+    if not app.state.bibliography:
+        log.warning("rag/bibliography.json 없음 — 근거 카드에 논문 제목·DOI 대신 파일명만 표시합니다")
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
     app.state.llm = (
         genai.Client(
@@ -91,9 +122,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="HRSG RAG API", lifespan=lifespan)
 
 
+class ContextItem(BaseModel):
+    """화면 데이터 항목 하나 — 라벨·값·단위만 받는다 (자유 텍스트·원문 문서는 받지 않음)"""
+    label: str = Field(min_length=1, max_length=80)
+    value: float | str | None = None
+    unit: str | None = Field(default=None, max_length=20)
+
+
+class ContextSnapshot(BaseModel):
+    """AI 어시스턴트가 첨부한 현재 화면 데이터 스냅샷 (프론트엔드 src/lib/aiContext.ts)"""
+    page: Literal["dashboard", "calculator", "checklist", "validation"]
+    title: str = Field(min_length=1, max_length=80)
+    items: list[ContextItem] = Field(max_length=40)
+
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=500)
     lang: Literal["ko", "en"] = "ko"
+    context: ContextSnapshot | None = None
 
 
 PREVIEW_CHARS = 100
@@ -109,14 +155,23 @@ class Source(BaseModel):
     id: str
     file: str
     text: str
+    # 근거 카드: 서지 · 검색 방식 (dense/bm25 순위 — None 이면 그 검색의 후보 40개에 없었음)
+    title: str | None = None
+    doi: str | None = None
+    citation: str | None = None
+    dense_rank: int | None = None
+    bm25_rank: int | None = None
 
 
-def to_source(rank: int, hit: dict, files: dict[str, str]) -> Source:
+def to_source(rank: int, hit: dict, files: dict[str, str], bib: dict[str, dict]) -> Source:
     text = hit["text"]
     preview = text if len(text) <= PREVIEW_CHARS else text[:PREVIEW_CHARS].rstrip() + "…"
+    b = bib.get(hit["doc_id"], {})
     return Source(
         rank=rank, doc_id=hit["doc_id"], page=hit["page"], text_preview=preview,
         rrf_score=round(hit["rrf_score"], 4), id=hit["id"], file=files.get(hit["doc_id"], ""), text=text,
+        title=b.get("title"), doi=b.get("doi"), citation=b.get("citation"),
+        dense_rank=hit.get("dense_rank"), bm25_rank=hit.get("bm25_rank"),
     )
 
 
@@ -137,12 +192,31 @@ def build_context(hits: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
-def call_llm(client: genai.Client | None, question: str, context: str) -> tuple[str | None, str, str | None, str | None]:
+def format_value(v: float | str | None) -> str:
+    if v is None:
+        return "—"
+    if isinstance(v, float):
+        return f"{v:,.6g}" if abs(v) < 1e6 else f"{v:,.0f}"
+    return mask_sensitive(v)[:60]
+
+
+def build_screen_context(ctx: ContextSnapshot | None) -> str:
+    """검증된(스키마·길이 제한) 화면 스냅샷만 프롬프트에 넣는다. 문자열 값은 다시 마스킹한다."""
+    if ctx is None or not ctx.items:
+        return ""
+    lines = [f"[현재 화면 데이터 — HRSG Explorer 앱 계산값, 문헌 아님] {mask_sensitive(ctx.title)}"]
+    for it in ctx.items:
+        unit = f" {it.unit}" if it.unit else ""
+        lines.append(f"- {mask_sensitive(it.label)}: {format_value(it.value)}{unit}")
+    return "\n".join(lines)
+
+
+def call_llm(client: genai.Client | None, question: str, context: str, screen: str = "") -> tuple[str | None, str, str | None, str | None]:
     """Gemini 로 답변 생성 → (answer, llm_status, message, served_model). MODELS 순서대로 시도한다."""
     if client is None:
         return None, "unavailable", "Gemini API 키가 설정되지 않았습니다 (.env 의 GEMINI_API_KEY).", None
     config = genai_types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, max_output_tokens=MAX_OUTPUT_TOKENS)
-    contents = f"{context}\n\n[질문]\n{question}"
+    contents = f"{context}\n\n{screen + chr(10) + chr(10) if screen else ''}[질문]\n{question}"
     last_error = "Gemini API 오류."
     for model in MODELS:
         try:
@@ -192,16 +266,21 @@ def timed_search(request: Request, query: str) -> tuple[list[dict], float]:
 # sync def → FastAPI 스레드풀에서 실행 (CPU 추론과 동기 Gemini 호출이 이벤트 루프를 막지 않음)
 @app.post("/api/ask", response_model=AskResponse)
 def ask(body: AskRequest, request: Request) -> AskResponse:
-    question = body.question.strip()
+    question = mask_sensitive(body.question.strip())
     if not question:
         raise HTTPException(422, "빈 질문")
+    # 검색은 질문 문장만으로 한다 — 화면 수치가 문헌 검색 순위를 흔들지 않게
     hits, retrieval_ms = timed_search(request, question)
-    sources = [to_source(rank, h, request.app.state.doc_files) for rank, h in enumerate(hits, 1)]
+    sources = [to_source(rank, h, request.app.state.doc_files, request.app.state.bibliography) for rank, h in enumerate(hits, 1)]
 
     t1 = time.perf_counter()
-    answer, status, message, served = call_llm(request.app.state.llm, question, build_context(hits))
+    screen = build_screen_context(body.context)
+    answer, status, message, served = call_llm(request.app.state.llm, question, build_context(hits), screen)
     llm_ms = (time.perf_counter() - t1) * 1000
-    log.info("ask: retrieval %.0fms, llm %.0fms (%s) — %s", retrieval_ms, llm_ms, status, question[:60])
+    log.info(
+        "ask: retrieval %.0fms, llm %.0fms (%s)%s — %s",
+        retrieval_ms, llm_ms, status, f" +context:{body.context.page}" if body.context else "", question[:60],
+    )
     return AskResponse(
         answer=answer, llm_status=status, llm_message=message, model=served,
         sources=sources, retrieval_ms=round(retrieval_ms, 1), llm_ms=round(llm_ms, 1),
@@ -216,6 +295,7 @@ def search(q: str, request: Request) -> dict:
 
 
 @app.get("/api/health")
+@app.get("/api/health/")
 def health(request: Request) -> dict:
     r = request.app.state.retriever
     return {"status": "ok", "passages": len(r.metadata), "docs": len(set(m["doc_id"] for m in r.metadata)), "device": r.device, "model": " → ".join(MODELS)}

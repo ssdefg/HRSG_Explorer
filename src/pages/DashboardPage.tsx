@@ -1,17 +1,34 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageScaffold } from '@/components/layout/PageScaffold';
-import { AiQaSection } from '@/components/qa/AiQaSection';
+import { AskAiButton } from '@/components/assistant/AskAiButton';
 import { QaHistoryPanel } from '@/components/qa/QaHistoryPanel';
-import { Card, DataTypeBadges, StatusBadge } from '@/components/ui';
+import { Card, DataTypeBadges, SegmentedToggle, StatusBadge } from '@/components/ui';
+import {
+  AlertBanner,
+  CleaningSummary,
+  KpiGrid,
+  NextActionCard,
+  ProcessFlow,
+  SnapshotCompare,
+  StepBar,
+  type DashMode,
+} from '@/components/dashboard/DashboardWidgets';
+import {
+  buildActualPerformanceGap,
+  buildCalcSummaryKpi,
+  buildChecklistReadiness,
+  buildMethodPaybacks,
+  buildStepProgress,
+} from '@/lib/dashboardModel';
 import { useAppSettings } from '@/context/AppSettings';
-import { useCalculator, useCases, useChecklist, useHistory, useMeasurements } from '@/context/Workspace';
+import { useCalculator, useCases, useChecklist, useHistory, useMeasurements, useQa } from '@/context/Workspace';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { activeAlarms, DEMO_ALARM_RULES } from '@/lib/alarms';
-import { calcChange, calcSimplePaybackMonths } from '@/lib/calc';
+import { calcChange } from '@/lib/calc';
 import { formatNumber, pick } from '@/lib/format';
 import { consumePendingSection, goToTab, scrollToSection } from '@/lib/useHashTab';
 import { INPUT_DEF, SCENARIO_LABEL } from '@/data/calculatorInputs';
-import { MOCK_CLEANING_METHODS } from '@/data/mockCleaning';
+import { SECTION_IDS } from '@/data/tabs';
 import { VALIDATION_SCENARIO } from '@/data/validationScenario';
 import { LEVEL_STATUS, levelLabel } from '@/components/calculator/level';
 import { fmtMetric, MetricStatusTag } from '@/components/calculator/metricText';
@@ -62,8 +79,8 @@ const TXT = {
     effectBreakeven: '손익분기 (예시 계산)',
     effectStatus: '평가 상태: 가상 시나리오 · 실측 미검증',
     toDetail: '세정 전후 상세 분석으로 이동',
-    methodTitle: '공법별 비용·편익 요약',
-    methodSub: '가상 데이터 · 실제 견적 아님',
+    methodTitle: '공법별 총투자·월간 편익 요약',
+    methodSub: '키트 공법 4개 · DEMO 데이터 · 실제 견적 아님',
     payback: '회수',
     months: '개월',
     histTitle: '최근 분석 내역',
@@ -91,7 +108,11 @@ const TXT = {
     go: '이동',
     toMissing: '누락 데이터 확인',
     won: '원',
-    moreTitle: '상세 내역 — 데이터 준비 · 세정 검토 · 공법 비교 · 분석 이력 · 케이스 · 다음 작업',
+    moreTitle: '상세 내역 — 운전 현황 · 데이터 준비 · 세정 검토 · 공법 비교 · 분석 이력 · 케이스 · 다음 작업',
+    viewMode: '표시 모드',
+    simMode: '시뮬레이션',
+    measMode: '실측',
+    viewNote: '실측 모드는 세정 전후 화면에 입력한 최근 실측값을 배압·스택 온도 카드에 표시합니다.',
   },
   en: {
     stOp: 'Mock operating state',
@@ -167,7 +188,11 @@ const TXT = {
     go: 'Go',
     toMissing: 'Check missing data',
     won: 'KRW',
-    moreTitle: 'Details — data readiness · cleaning review · methods · analyses · case · next steps',
+    moreTitle: 'Details — operation · data readiness · cleaning review · methods · analyses · case · next steps',
+    viewMode: 'View mode',
+    simMode: 'Simulation',
+    measMode: 'Measured',
+    viewNote: 'Measured mode shows the latest values entered on the pre/post screen in the back-pressure and stack cards.',
   },
 };
 
@@ -176,7 +201,7 @@ const TXT = {
  * 계산 결과는 계산기와 같은 중앙 상태를 참조한다(화면별 재계산 없음).
  */
 export function DashboardPage({ navCount }: { navCount: number }) {
-  const { lang, t } = useAppSettings();
+  const { lang } = useAppSettings();
   const x = TXT[lang];
   const c = useCalcText();
   const calc = useCalculator();
@@ -187,7 +212,7 @@ export function DashboardPage({ navCount }: { navCount: number }) {
   const cur = cases.current;
   const v = calc.values;
   const m = calc.metrics;
-  const alarms = activeAlarms({ currentBp: v.currentBp, scenario: calc.mode === 'demo' ? calc.scenario : 'custom' });
+  const alarms = activeAlarms({ currentBp: v.currentBp, scenario: calc.mode === 'demo' ? calc.scenario : 'custom', bands: calc.bands });
   const scenarioLabel = SCENARIO_LABEL[calc.mode === 'demo' ? calc.scenario : 'custom'][lang];
   const r = cl.readiness;
   const n = (val: number | null, d = 0) => (val === null ? '—' : formatNumber(val, lang, d));
@@ -197,10 +222,26 @@ export function DashboardPage({ navCount }: { navCount: number }) {
   const unreviewed = cl.summary.total - cl.summary.reviewedCount;
   // DEMO 시나리오일 때만 KPI 카드 우측 상단에 표시
   const demoBadge = calc.mode === 'demo' ? <span className="badge badge--demo-mini">DEMO</span> : undefined;
+  const [viewMode, setViewMode] = useState<DashMode>('simulation');
+  const qa = useQa();
+  const aiMessageCount = cur.qa.conversations.reduce((n, c) => n + c.messages.length, 0);
+  const kpi = useMemo(() => buildCalcSummaryKpi(calc), [calc]);
+  const readiness = buildChecklistReadiness(cl.summary, r);
+  const gap = buildActualPerformanceGap(entries, calc, m.breakEvenDays.status === 'ok' ? m.breakEvenDays.value : null);
+  const methods = buildMethodPaybacks(calc);
+  const steps = buildStepProgress({
+    requiredMet: r.requiredMet,
+    calcValid: calc.valid,
+    calcStale: calc.stale,
+    snapshots: history.snapshots.length,
+    aiMessages: aiMessageCount,
+  });
   // 다른 화면에서 AI 질의응답(예: 계산기 '이 결과 질문하기')으로 이동해 온 경우
   useEffect(() => {
     const section = consumePendingSection();
-    if (section) window.requestAnimationFrame(() => scrollToSection(section));
+    // 예전 #qa 주소·AI 영역 이동은 전역 AI 어시스턴트를 연다
+    if (section === SECTION_IDS.ai) qa.setChatOpen(true);
+    else if (section) window.requestAnimationFrame(() => scrollToSection(section));
   }, [navCount]);
 
   const goMissing = () => {
@@ -211,71 +252,98 @@ export function DashboardPage({ navCount }: { navCount: number }) {
 
   const tasks: { text: string; action: () => void }[] = [];
   if (calc.errorIds.length) tasks.push({ text: x.tFixInputs(calc.errorIds.length), action: () => goToTab('calculator') });
-  if (cl.summary.byStatus.requestNeeded === 0 && r.missingIds.length) tasks.push({ text: x.tMarkRequest(r.missingIds.length), action: goMissing });
-  if (cl.summary.byStatus.requestNeeded > 0) tasks.push({ text: x.tSendEmail(cl.summary.byStatus.requestNeeded), action: () => goToTab('checklist') });
+  if (cl.summary.byStatus.requested === 0 && r.missingIds.length) tasks.push({ text: x.tMarkRequest(r.missingIds.length), action: goMissing });
+  if (cl.summary.byStatus.requested > 0) tasks.push({ text: x.tSendEmail(cl.summary.byStatus.requested), action: () => goToTab('checklist') });
   if (unreviewed > 0) tasks.push({ text: x.tReview(unreviewed), action: () => goToTab('checklist') });
   if (history.snapshots.length === 0) tasks.push({ text: x.tSnapshot, action: () => goToTab('calculator') });
   if (entries.length === 0) tasks.push({ text: x.tMeasure, action: () => goToTab('validation') });
 
   return (
     <PageScaffold tabId="dashboard" compact pageDataTypes={['mock', 'example', 'noMeasured', 'planned']}>
-      {/* 최상단: 핵심 KPI 4개 — 값·배지는 아래 상세 카드와 같은 중앙 상태 */}
-      <div className="dash-overview" role="group" aria-label={t.keyIndicators}>
-        <Card className="ov-kpi" title={x.bp} badges={demoBadge}>
-          <p className="ov-kpi__value">
-            <span className="num">{n(v.currentBp)}</span> <small>mmH₂O</small>
-            <span className="ov-kpi__status">
-              {calc.level ? <StatusBadge status={LEVEL_STATUS[calc.level]} label={levelLabel(calc.level, c)} /> : '—'}
-            </span>
-          </p>
-          <div className="ov-kpi__foot">
-            <DataTypeBadges types={['unconfirmed']} />
-          </div>
-        </Card>
-        <Card className="ov-kpi ov-kpi--key" title={x.lossKrw} badges={demoBadge}>
-          <p className="ov-kpi__value">
-            <span className="num" data-testid="dash-loss-krw">
-              {fmtMetric(m.monthlyLossKrw, lang)}
-            </span>{' '}
-            <small>{x.won}</small>
-          </p>
-          <div className="ov-kpi__foot">
-            <MetricStatusTag state={calc} id="monthlyLossKrw" lang={lang} />
-            <DataTypeBadges types={m.monthlyLossKrw.status === 'model' ? ['planned'] : ['example']} />
-          </div>
-        </Card>
-        <Card className="ov-kpi" title={x.lossMw} badges={demoBadge}>
-          <p className="ov-kpi__value">
-            <span className="num" data-testid="dash-loss-mw">
-              {fmtMetric(m.powerLossMw, lang, 2)}
-            </span>{' '}
-            <small>MW</small>
-          </p>
-          <div className="ov-kpi__foot">
-            <MetricStatusTag state={calc} id="powerLossMw" lang={lang} />
-            <DataTypeBadges types={m.powerLossMw.status === 'model' ? ['planned'] : ['example']} />
-          </div>
-        </Card>
-        <Card className="ov-kpi" title={x.readyTitle} badges={demoBadge}>
-          <p className="ov-kpi__value">
-            <span className="num">{cl.summary.receivedCount}</span> <small className="num">/ {cl.summary.total}</small>
-          </p>
-          <div className="meter meter--receipt ov-kpi__meter">
-            <span style={{ width: `${cl.summary.receivedPct}%` }} />
-          </div>
-          <div className="ov-kpi__foot">
-            <span className="ov-kpi__caption">
-              {x.receipt} <span className="num">{formatNumber(cl.summary.receivedPct, lang, 0)}%</span>
-            </span>
-            <DataTypeBadges types={['noMeasured']} />
-          </div>
-        </Card>
+      {/* 평가 진행 단계 + 주의/경고 배너 */}
+      <StepBar lang={lang} steps={steps} />
+      <AlertBanner
+        lang={lang}
+        calc={calc}
+        kpi={kpi}
+        readiness={readiness}
+        tripScenario={calc.mode === 'demo' && calc.scenario === 'trip'}
+        onChecklist={goMissing}
+        onCalculator={() => goToTab('calculator')}
+      />
+
+      {/* Header / Filter Bar — 시뮬레이션 ↔ 실측 모드 (가이드 §2.2) */}
+      <div className="dash-filter">
+        <SegmentedToggle<DashMode>
+          className="seg--light"
+          label={x.viewMode}
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { value: 'simulation', label: x.simMode },
+            { value: 'measured', label: x.measMode },
+          ]}
+        />
+        {viewMode === 'measured' && <span className="note">{x.viewNote}</span>}
+        <AskAiButton tab="dashboard" className="dash-filter__ask" />
       </div>
 
-      {/* 전체 폭 AI 카드: [대화+입력 | 추천 질문] */}
-      <AiQaSection />
+      {/* KPI 7종 — 값은 계산기와 같은 중앙 상태 */}
+      <KpiGrid lang={lang} mode={viewMode} kpi={kpi} calc={calc} readiness={readiness} gap={gap} demoBadge={demoBadge} />
 
-      {/* 운전 현황 · 세정 전후 요약 — 2열 */}
+
+      <div className="dash-cols">
+        <ProcessFlow lang={lang} calc={calc} kpi={kpi} />
+        <CleaningSummary lang={lang} kpi={kpi} gap={gap} baselineBp={calc.values.referenceBp} />
+      </div>
+      <div className="dash-cols">
+        <NextActionCard lang={lang} evaluable={r.evaluable} methods={methods} readiness={readiness} onMissing={goMissing} />
+        <SnapshotCompare lang={lang} snapshots={history.snapshots} />
+      </div>
+
+      {/* 상태 표시 — 실시간 정보가 아님 */}
+      <div className="status-strip card" role="group" aria-label={x.stOp} data-testid="status-strip">
+        <div className="status-strip__item">
+          <span className="status-strip__label">{x.stOp}</span>
+          <span className="status-strip__value">
+            {scenarioLabel}
+            {calc.level && <StatusBadge status={LEVEL_STATUS[calc.level]} label={levelLabel(calc.level, c)} />}
+          </span>
+        </div>
+        <details className="status-strip__item status-strip__alarms">
+          <summary>
+            <span className="status-strip__label">{x.stAlarms}</span>
+            <strong className="status-strip__value num" data-testid="alarm-count">
+              {alarms.length}
+            </strong>
+          </summary>
+          <ul className="alarm-rules">
+            {DEMO_ALARM_RULES.map((rule) => (
+              <li key={rule.id} className={alarms.includes(rule) ? 'is-active' : undefined}>
+                {alarms.includes(rule) ? '● ' : '○ '}
+                {rule.label[lang]}
+              </li>
+            ))}
+            {alarms.length === 0 && <li>{x.stAlarmNone}</li>}
+          </ul>
+          <span className="note">{x.stAlarmRules}</span>
+        </details>
+        <div className="status-strip__item">
+          <span className="status-strip__label">{x.stDataTime}</span>
+          <span className="status-strip__value status-strip__value--muted">{x.stDataTimeVal}</span>
+        </div>
+        <div className="status-strip__item">
+          <span className="status-strip__label">{x.stCalcTime}</span>
+          <span className="status-strip__value num">{fmtTime(cur.updatedAt)}</span>
+        </div>
+        <span className="badge badge--mock">DEMO · MOCK DATA</span>
+        <span className="note">{x.stNotLive}</span>
+      </div>
+
+      {/* 하단: 상세 내역 — 기본 접힘 (카드 내용은 그대로) */}
+      <details className="dash-more">
+        <summary className="dash-more__summary">{x.moreTitle}</summary>
+        <div className="dash-more__body">
       <div className="dash-cols">
         <Card title={x.opTitle} subtitle={x.opSub} badges={<DataTypeBadges types={calc.mode === 'demo' ? ['mock'] : ['userInput']} />}>
           <dl className="kv-grid">
@@ -342,49 +410,6 @@ export function DashboardPage({ navCount }: { navCount: number }) {
         </Card>
       </div>
 
-      {/* 상태 표시 — 실시간 정보가 아님 */}
-      <div className="status-strip card" role="group" aria-label={x.stOp} data-testid="status-strip">
-        <div className="status-strip__item">
-          <span className="status-strip__label">{x.stOp}</span>
-          <span className="status-strip__value">
-            {scenarioLabel}
-            {calc.level && <StatusBadge status={LEVEL_STATUS[calc.level]} label={levelLabel(calc.level, c)} />}
-          </span>
-        </div>
-        <details className="status-strip__item status-strip__alarms">
-          <summary>
-            <span className="status-strip__label">{x.stAlarms}</span>
-            <strong className="status-strip__value num" data-testid="alarm-count">
-              {alarms.length}
-            </strong>
-          </summary>
-          <ul className="alarm-rules">
-            {DEMO_ALARM_RULES.map((rule) => (
-              <li key={rule.id} className={alarms.includes(rule) ? 'is-active' : undefined}>
-                {alarms.includes(rule) ? '● ' : '○ '}
-                {rule.label[lang]}
-              </li>
-            ))}
-            {alarms.length === 0 && <li>{x.stAlarmNone}</li>}
-          </ul>
-          <span className="note">{x.stAlarmRules}</span>
-        </details>
-        <div className="status-strip__item">
-          <span className="status-strip__label">{x.stDataTime}</span>
-          <span className="status-strip__value status-strip__value--muted">{x.stDataTimeVal}</span>
-        </div>
-        <div className="status-strip__item">
-          <span className="status-strip__label">{x.stCalcTime}</span>
-          <span className="status-strip__value num">{fmtTime(cur.updatedAt)}</span>
-        </div>
-        <span className="badge badge--mock">DEMO · MOCK DATA</span>
-        <span className="note">{x.stNotLive}</span>
-      </div>
-
-      {/* 하단: 상세 내역 — 기본 접힘 (카드 내용은 그대로) */}
-      <details className="dash-more">
-        <summary className="dash-more__summary">{x.moreTitle}</summary>
-        <div className="dash-more__body">
           <h3 className="section-title">{x.sumTitle}</h3>
           <div className="dash-cols dash-cols--3">
             <Card title={x.needTitle} badges={<DataTypeBadges types={['unconfirmed']} />}>
@@ -395,20 +420,19 @@ export function DashboardPage({ navCount }: { navCount: number }) {
             </Card>
             <Card title={x.methodTitle} subtitle={x.methodSub} badges={<DataTypeBadges types={['mock']} />}>
               <ul className="method-list">
-                {MOCK_CLEANING_METHODS.map((mt) => {
-                  const pb = calcSimplePaybackMonths(mt.costKrw, mt.monthlyBenefitKrw);
-                  return (
-                    <li key={mt.id}>
-                      <span>{mt.label[lang]}</span>
-                      <span className="num">
-                        {formatNumber(mt.costKrw / 1e6, lang, 0)} / {formatNumber(mt.monthlyBenefitKrw / 1e6, lang, 0)} {lang === 'ko' ? '백만원' : 'KRW M'}
-                      </span>
-                      <span className="num note">
-                        {x.payback} {pb === null ? '—' : formatNumber(pb, lang, 2)} {x.months}
-                      </span>
-                    </li>
-                  );
-                })}
+                {calc.kit.methods.map((mt) => (
+                  <li key={mt.id}>
+                    <span>{mt.name}</span>
+                    <span className="num">
+                      {mt.available
+                        ? `${formatNumber((mt.total_investment_krw ?? 0) / 1e6, lang, 0)} / ${formatNumber((mt.monthly_benefit_krw ?? 0) / 1e6, lang, 0)} ${lang === 'ko' ? '백만원' : 'KRW M'}`
+                        : mt.message}
+                    </span>
+                    <span className="num note">
+                      {x.payback} {mt.payback_months == null ? '—' : formatNumber(mt.payback_months, lang, 2)} {x.months}
+                    </span>
+                  </li>
+                ))}
               </ul>
             </Card>
             <Card title={x.readyTitle} subtitle={x.readySub} badges={<DataTypeBadges types={['noMeasured']} />}>
@@ -504,7 +528,7 @@ export function DashboardPage({ navCount }: { navCount: number }) {
                 </div>
                 <div>
                   <dt>{x.messages}</dt>
-                  <dd className="num">{cur.qa.messages.length}</dd>
+                  <dd className="num">{aiMessageCount}</dd>
                 </div>
               </dl>
             </Card>

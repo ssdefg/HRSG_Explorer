@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PageScaffold } from '@/components/layout/PageScaffold';
 import { Card, DataTypeBadges, SegmentedToggle } from '@/components/ui';
-import { ReceiptStatusBadge, RECEIPT_LABEL, RECEIPT_STATUSES, isReceiptStatus } from '@/components/ui/ReceiptStatusBadge';
+import {
+  ReceiptStatusBadge,
+  RECEIPT_LABEL,
+  RECEIPT_STATUSES,
+  VERIFY_LABEL_L,
+  VERIFY_STATUSES,
+  isReceiptStatus,
+  isVerifyStatus,
+} from '@/components/ui/ReceiptStatusBadge';
 import { useAppSettings } from '@/context/AppSettings';
 import { useChecklist, useToast } from '@/context/Workspace';
-import { CHECKLIST_CATEGORY_LABEL, CHECKLIST_ITEMS, REQUIRED_ITEM_IDS, type ChecklistCategory, type Priority } from '@/data/checklistItems';
+import { CHECKLIST_CATEGORIES, CHECKLIST_CATEGORY_LABEL, CHECKLIST_ITEMS, type Priority } from '@/data/checklistItems';
 import { PENDING_STATUSES, RECEIVED_STATUSES, type ProgressStats } from '@/lib/checklistStats';
-import { buildRequestEmail } from '@/lib/emailDraft';
+import { buildRequestEmail, emailBodyToHtml } from '@/lib/emailDraft';
+import { copyText } from '@/lib/clipboard';
+import { AskAiButton } from '@/components/assistant/AskAiButton';
 import { formatNumber } from '@/lib/format';
 
 type Filter = 'all' | 'pending' | 'received';
@@ -19,10 +29,10 @@ const TXT = {
     reviewTitle: '검토 진행률',
     reviewDesc: '검토 체크된 항목 ÷ 전체 항목 × 100',
     receiptTitle: '데이터 수령률',
-    receiptDesc: '(수령 완료 + 검증 필요) 항목 ÷ 전체 항목 × 100 · 검증 필요는 수령 후 검증 대기로 집계',
+    receiptDesc: '(수령 완료 + 검증 필요) 항목 ÷ (전체 − 해당 없음) × 100 · 키트 kpis() 기준',
     statusTitle: '데이터 상태 분포',
     catTitle: '카테고리별 진행률',
-    required: (met: number, total: number) => `필수 데이터 충족 ${met}/${total} (우선순위 높음 항목이 "수령 완료")`,
+    required: (met: number, total: number) => `필수 데이터 충족 ${met}/${total} (키트 기준: 수령 완료·검증 필요이며 검증 실패가 아님)`,
     items: '항목',
     search: '항목 검색',
     searchPh: '항목명·이유·형식으로 검색',
@@ -49,6 +59,8 @@ const TXT = {
     condPh: '측정 조건',
     reviewAria: (n: string) => `${n} 검토 완료`,
     statusAria: (n: string) => `${n} 데이터 상태`,
+    verifyAria: (n: string) => `${n} 검증 상태`,
+    docValue: '문서',
     noteAria: (n: string) => `${n} 메모`,
     valueAria: (n: string) => `${n} 측정값`,
     unitAria: (n: string) => `${n} 단위`,
@@ -71,6 +83,8 @@ const TXT = {
     body: '이메일 본문',
     copy: '제목·본문 복사',
     copied: '클립보드에 복사했습니다. (발송되지 않았습니다)',
+    copyHtml: 'HTML로 복사',
+    needValue: (item: string, st: string) => `${item}: 실측값을 먼저 입력해야 '${st}'(으)로 변경할 수 있습니다.`,
     copyFail: '자동 복사에 실패했습니다. 본문을 직접 선택해 복사해 주세요.',
     draftBadge: '초안 · 미발송',
     edited: '편집됨',
@@ -83,10 +97,10 @@ const TXT = {
     reviewTitle: 'Review progress',
     reviewDesc: 'Reviewed items ÷ all items × 100',
     receiptTitle: 'Data receipt rate',
-    receiptDesc: '(Received + Needs verification) ÷ all items × 100 · needs verification counts as received, pending verification',
+    receiptDesc: '(Received + Needs verification) ÷ (all − N/A) × 100 · kit kpis()',
     statusTitle: 'Data status breakdown',
     catTitle: 'Progress by category',
-    required: (met: number, total: number) => `Required data met ${met}/${total} (high-priority items "received")`,
+    required: (met: number, total: number) => `Required data met ${met}/${total} (kit rule: received or needs verification, and not failed)`,
     items: 'items',
     search: 'Search items',
     searchPh: 'Search name, reason or format',
@@ -113,6 +127,8 @@ const TXT = {
     condPh: 'Condition',
     reviewAria: (n: string) => `${n} reviewed`,
     statusAria: (n: string) => `${n} data status`,
+    verifyAria: (n: string) => `${n} verification status`,
+    docValue: 'Document',
     noteAria: (n: string) => `${n} memo`,
     valueAria: (n: string) => `${n} measured value`,
     unitAria: (n: string) => `${n} unit`,
@@ -135,6 +151,8 @@ const TXT = {
     body: 'Email body',
     copy: 'Copy subject & body',
     copied: 'Copied to clipboard. (Not sent)',
+    copyHtml: 'Copy as HTML',
+    needValue: (item: string, st: string) => `${item}: enter the measured value before changing to "${st}".`,
     copyFail: 'Automatic copy failed. Please select the text and copy it manually.',
     draftBadge: 'Draft · not sent',
     edited: 'Edited',
@@ -142,32 +160,7 @@ const TXT = {
   },
 };
 
-const CATS: ChecklistCategory[] = ['A', 'B', 'C'];
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* 아래 대체 경로 시도 */
-  }
-  try {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
-}
+const CATS = CHECKLIST_CATEGORIES;
 
 function ProgressMeter({ title, desc, pct, count, total, lang, kind, testId }: {
   title: string;
@@ -240,7 +233,7 @@ export function ChecklistPage() {
     });
   }, [query, filter, cl.status, cl.notes, lang]);
 
-  const requested = CHECKLIST_ITEMS.filter((i) => cl.status[i.id] === 'requestNeeded');
+  const requested = CHECKLIST_ITEMS.filter((i) => cl.status[i.id] === 'requested');
   const requestedKey = `${requested.map((i) => i.id).join(',')}|${cl.clientName}`;
   const [draft, setDraft] = useState<{ subject: string; body: string; key: string; edited: boolean } | null>(null);
 
@@ -255,11 +248,36 @@ export function ChecklistPage() {
     toast.push(ok ? x.copied : x.copyFail, ok ? 'success' : 'error');
   };
 
+  /** 표가 유지되도록 text/html 로 복사 (지원하지 않는 브라우저는 마크다운 텍스트로 대체) */
+  const onCopyHtml = async () => {
+    if (!draft) return;
+    const text = `${x.subject}: ${draft.subject}
+
+${draft.body}`;
+    let ok = false;
+    try {
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        const html = `<p><strong>${x.subject}:</strong> ${draft.subject.replace(/</g, '&lt;')}</p>${emailBodyToHtml(draft.body)}`;
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) }),
+        ]);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) ok = await copyText(text);
+    toast.push(ok ? x.copied : x.copyFail, ok ? 'success' : 'error');
+  };
+
   const met = cl.readiness.requiredTotal - cl.readiness.missingIds.length;
   const catStats = (s: ProgressStats) => `${s.receivedCount}/${s.total} · ${s.reviewedCount}/${s.total}`;
 
   return (
     <PageScaffold tabId="checklist" pageDataTypes={['noMeasured', 'implemented']}>
+      <div className="page-actions">
+        <AskAiButton tab="checklist" />
+      </div>
       <p className="page-notice" role="note">
         <DataTypeBadges types={['noMeasured']} />
         <span>{x.notice}</span>
@@ -368,7 +386,7 @@ export function ChecklistPage() {
                 const name = it.name[lang];
                 const statusVal = cl.status[it.id];
                 const meta = cl.meta[it.id];
-                const isRequired = REQUIRED_ITEM_IDS.includes(it.id);
+                const isRequired = it.required;
                 return (
                   <div
                     key={it.id}
@@ -402,7 +420,7 @@ export function ChecklistPage() {
                       <input
                         className="text-input"
                         value={meta.value}
-                        placeholder={x.valuePh}
+                        placeholder={it.kind === 'document' ? x.docValue : x.valuePh}
                         maxLength={60}
                         onChange={(e) => cl.setMeta(it.id, { value: e.target.value })}
                         aria-label={x.valueAria(name)}
@@ -446,13 +464,32 @@ export function ChecklistPage() {
                       <select
                         className="select"
                         value={statusVal}
-                        onChange={(e) => isReceiptStatus(e.target.value) && cl.setStatus(it.id, e.target.value)}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          if (!isReceiptStatus(next)) return;
+                          // 실측값 없이 수령 완료·검증 필요로 바꾸면 차단하고 이전 상태 유지 (가이드 §2.4)
+                          if (!cl.setStatus(it.id, next)) toast.push(x.needValue(name, RECEIPT_LABEL[lang][next]), 'error');
+                        }}
                         aria-label={x.statusAria(name)}
                         data-status-for={it.id}
                       >
                         {RECEIPT_STATUSES.map((s) => (
                           <option key={s} value={s}>
                             {RECEIPT_LABEL[lang][s]}
+                          </option>
+                        ))}
+                      </select>
+                      {/* 키트 검증 상태 — 필수 충족 = 수령 + 검증 실패 아님 */}
+                      <select
+                        className="select select--sm"
+                        value={cl.verify[it.id]}
+                        onChange={(e) => isVerifyStatus(e.target.value) && cl.setVerify(it.id, e.target.value)}
+                        aria-label={x.verifyAria(name)}
+                        data-verify-for={it.id}
+                      >
+                        {VERIFY_STATUSES.map((v) => (
+                          <option key={v} value={v}>
+                            {VERIFY_LABEL_L[lang][v]}
                           </option>
                         ))}
                       </select>
@@ -560,6 +597,9 @@ export function ChecklistPage() {
             <div className="email-actions">
               <button type="button" className="btn btn--ghost" onClick={onCopy} data-testid="email-copy">
                 {x.copy}
+              </button>
+              <button type="button" className="btn btn--ghost" onClick={onCopyHtml} data-testid="email-copy-html">
+                {x.copyHtml}
               </button>
             </div>
           </div>

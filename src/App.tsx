@@ -9,6 +9,8 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { CalculatorPage } from '@/pages/CalculatorPage';
 import { ChecklistPage } from '@/pages/ChecklistPage';
 import { ValidationPage } from '@/pages/ValidationPage';
+import { FloatingAssistant } from '@/components/assistant/FloatingAssistant';
+import { useQa } from '@/context/Workspace';
 
 const PAGES: Record<TabId, ComponentType<{ navCount: number }>> = {
   dashboard: DashboardPage,
@@ -23,9 +25,12 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const closeNav = useCallback(() => setNavOpen(false), []);
   const Page = PAGES[tab];
+  const qa = useQa();
+  // 데스크톱에서 사이드 패널로 확장하면 메인 콘텐츠를 패널 너비만큼 줄여 가리지 않는다 (좁은 화면은 CSS 에서 오버레이)
+  const panelOpen = qa.chatOpen && qa.chatMode === 'panel';
 
   return (
-    <div className="shell">
+    <div className={`shell${panelOpen ? ' shell--assistant-panel' : ''}`}>
       <Sidebar active={tab} open={navOpen} onClose={closeNav} />
       <div className="shell__main">
         <UtilityHeader active={tab} navOpen={navOpen} onMenu={() => setNavOpen((o) => !o)} />
@@ -37,6 +42,8 @@ export default function App() {
         <AppFooter />
       </div>
       <ToastHost />
+      {/* 전역 AI 어시스턴트 — 최상위 레이아웃에 두어 페이지 이동 시 다시 만들어지지 않는다 */}
+      <FloatingAssistant tab={tab} />
     </div>
   );
 }

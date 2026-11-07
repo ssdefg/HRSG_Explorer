@@ -17,8 +17,8 @@ export const PAGE_META: Record<TabId, PageMeta> = {
   calculator: {
     title: { ko: '성능·경제성 계산기', en: 'Performance & Economics Calculator' },
     description: {
-      ko: '배압 상승에 따른 발전 손실과 세정 경제성을 예시 계산식으로 산정합니다. 입력값을 바꾸면 KPI·게이지·차트가 즉시 갱신됩니다. 세정 전후 상세 분석은 "세정 전후" 메뉴에 있습니다.',
-      en: 'Estimates back-pressure-driven power loss and cleaning economics with example formulas. KPIs, gauge and charts update as inputs change. The detailed pre/post-cleaning analysis is in the "Pre/Post Cleaning" menu.',
+      ko: '배압 상승에 따른 발전 손실과 세정 경제성을 예시 계산식으로 산정합니다. 입력값을 바꾸면 이전 결과가 가려지고 "재평가 필요"가 표시되며, "재평가 실행"으로 다시 계산합니다. 세정 전후 상세 분석은 "세정 전후" 메뉴에 있습니다.',
+      en: 'Estimates back-pressure-driven power loss and cleaning economics with example formulas. Editing an input hides the previous results and shows "Re-evaluation needed" until you re-evaluate. The detailed pre/post-cleaning analysis is in the "Pre/Post Cleaning" menu.',
     },
   },
   checklist: {

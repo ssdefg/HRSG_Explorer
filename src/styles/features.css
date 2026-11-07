@@ -77,15 +77,16 @@
 .badge--receipt .badge__glyph {
   display: none;
 }
-.badge--receipt-noMeasured { --receipt-dot: var(--c-ink-3); color: var(--c-ink-3); }
-.badge--receipt-requestNeeded { --receipt-dot: var(--c-accent); color: var(--c-accent-ink); }
+.badge--receipt-not_entered { --receipt-dot: var(--c-ink-3); color: var(--c-ink-3); }
+.badge--receipt-requested { --receipt-dot: var(--c-accent); color: var(--c-accent-ink); }
 /* '요청 필요'는 빈 원(링) — 색이 비슷한 '검증 필요'(앰버 점)와 모양으로도 구분 */
-.badge--receipt-requestNeeded::before {
+.badge--receipt-requested::before {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--receipt-dot);
 }
 .badge--receipt-received { --receipt-dot: var(--c-normal); color: var(--c-normal-ink); }
-.badge--receipt-needsVerification { --receipt-dot: var(--c-caution); color: var(--c-caution-ink); }
+.badge--receipt-verify_needed { --receipt-dot: var(--c-caution); color: var(--c-caution-ink); }
+.badge--receipt-na { --receipt-dot: var(--c-line-strong); color: var(--c-ink-3); text-decoration: line-through; }
 
 /* AI 미연동 안내 — 다른 안내와 같은 insight 선 (오렌지는 실제 AI 답변 강조선 전용) */
 .page-notice--ai {
@@ -398,14 +399,14 @@
 .meter {
   margin-top: var(--sp-3);
   height: 6px;
-  border-radius: 3px;
-  background: var(--c-surface-2);
+  border-radius: 999px;
+  background: var(--c-track);
   overflow: hidden;
 }
 .meter span {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 999px;
   transition: width 0.2s ease;
 }
 /* 수령(데이터 상태)과 검토(체크 여부)를 색으로도 구분 — 검토 = 브랜드 오렌지(체크박스와 동일) */
@@ -774,7 +775,7 @@
   transform: rotate(45deg);
 }
 .chart-tip__swatch--measured {
-  background: var(--c-ink);
+  background: var(--c-chart-main);
   transform: rotate(45deg) scale(0.8);
 }
 
@@ -944,3 +945,23 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* 세정 전후 운전 조건 편차 가드 */
+.cond-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+@media (max-width: 640px) {
+  .cond-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.cond-banner {
+  border-left: 3px solid var(--c-warning);
+  background: var(--c-warning-bg);
+  color: var(--c-warning-ink);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+
+/* 키트 검증 상태 선택 (수급 상태 아래) */
+.chk-row__status .select--sm { margin-top: 4px; }

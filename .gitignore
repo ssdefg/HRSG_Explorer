@@ -15,19 +15,20 @@ rag/*.npy
 rag/*.pkl
 __pycache__/
 
+# HRSG 계산기·체크리스트 키트 (팀 공통 코어) — 외부 재배포 금지, 커밋하지 않음.
+# 앱은 src/lib/calc_adapter.ts 로 이 폴더를 읽으므로, 클론한 뒤 키트 폴더를 프로젝트 루트에 직접 넣어야 한다.
+hrsg_calc_kit_team1/
+hrsg_calc_kit_team*/
+hrsg_calc_kit*.zip
+
 # API 키 등 로컬 비밀 값
 .env
 
 # 평가 캐시 (임베딩 등)
 .cache/
 
-# 공식 평가셋(corpus·질문·채점 스크립트)은 재배포 금지 — 우리가 작성한 하이브리드 도구만 커밋
-hrsg_eval_set_v1/*
-!hrsg_eval_set_v1/App/
-hrsg_eval_set_v1/App/*
-!hrsg_eval_set_v1/App/tools/
-hrsg_eval_set_v1/App/tools/*
-!hrsg_eval_set_v1/App/tools/hybrid/
+# 공식 평가셋(corpus·질문·채점 스크립트)은 재배포 금지 — 폴더 전체를 커밋하지 않음 (하이브리드 평가 도구 포함, 로컬에만 둠)
+hrsg_eval_set_v1/
 
 # HRSG 내부 문서(계획서·협약안), 개인 편집기 설정
 /26*_HRSG_*.pdf

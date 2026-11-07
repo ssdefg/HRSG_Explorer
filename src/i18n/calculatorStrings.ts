@@ -1,6 +1,10 @@
 import type { Lang } from '@/types';
 import { useAppSettings } from '@/context/AppSettings';
-import { BP_THRESHOLDS as T, POWER_LOSS_COEFF_MW_PER_MMH2O as K } from '@/lib/calc';
+import { KIT_CALC_DATA } from '@/lib/kit';
+
+/** 키트 계산 상수 — 문구가 키트 값을 따라가게 (하드코딩 방지) */
+const K = KIT_CALC_DATA.constants;
+const f1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1);
 
 /** 문구 속 계수·임계값은 계산 엔진 상수에서 가져온다 — 엔진 값을 바꾸면 안내 문구도 함께 바뀐다. */
 
@@ -12,24 +16,24 @@ const ko = {
 
   // KPI
   kpiCurrentBp: '현재 배압',
-  kpiDeltaBp: '기준 배압 대비 초과분',
+  kpiDeltaBp: '초과 압력 (GT 배압·HRSG 차압 중 큰 값)',
   kpiPowerLoss: '발전 손실 추정치',
   kpiMonthlyLoss: '월간 경제적 손실 예시',
-  kpiCurrentBpNote: '시연용 임계값 기준 상태',
-  kpiDeltaBpNote: (ref: string) => `기준 배압 ${ref} mmH₂O 대비`,
-  kpiPowerLossNote: `초과분 × 임시 계수 ${K} MW/mmH₂O`,
+  kpiCurrentBpNote: '키트 GT 등급 지표 기준 종합 판정',
+  kpiDeltaBpNote: (ref: string) => `기준 배압 ${ref} mmH₂O · HRSG 차압 설계값 대비 초과분 중 큰 값`,
+  kpiPowerLossNote: `GT 정격 × ${K.gt_loss_pct_per_mbar} %/mbar × 초과 압력 + ST 정격 × ${K.st_loss_pct_per_c} %/°C × 스택 초과`,
   won: '원',
   invalidInput: '입력값 확인 필요',
 
   // inputs
   inputsTitle: '계산기 입력값',
-  inputsSubtitle: '값을 바꾸면 KPI·게이지·차트가 즉시 갱신됩니다.',
+  inputsSubtitle: '값을 바꾸면 결과가 가려지고, "재평가 실행"으로 다시 계산합니다.',
   hrsgClass: 'HRSG 설비 유형',
   classCapacityNote: (mw: number) => `선택 시 시연용 용량 ${mw} MW 적용 — 실제 설비의 공식 용량이 아님`,
   reset: '기본값으로 초기화',
   range: (min: string, max: string) => `허용 범위 ${min} ~ ${max}`,
-  errEmpty: '값을 입력하세요.',
-  errNan: '숫자만 입력할 수 있습니다.',
+  errEmpty: '유효한 숫자를 입력하세요.',
+  errNan: '유효한 숫자를 입력하세요.',
   errNegative: '음수는 입력할 수 없습니다.',
   errMin: (min: string) => `${min} 이상이어야 합니다.`,
   errMax: (max: string) => `${max} 이하이어야 합니다.`,
@@ -37,12 +41,12 @@ const ko = {
 
   // result
   resultTitle: '계산 결과',
-  resultSubtitle: '중앙 계산 엔진(src/lib/calc.ts)의 단계별 산식',
+  resultSubtitle: '키트 계산식(hrsg_calc_kit_team1, calc_adapter 경유)의 단계별 결과',
   stepDelta: '배압 초과분',
   stepPower: '발전 손실 예시',
   stepMonthly: '월간 손실 예시',
   stepPending: '입력값 오류로 계산 보류',
-  coeffNote: `${K}는 시연용 임시 계수이며 공학적으로 검증된 계수가 아닙니다.`,
+  coeffNote: `손실 계수 ${K.gt_loss_pct_per_mbar} %/mbar · ${K.st_loss_pct_per_c} %/°C 는 키트의 DEMO 임시값이며 공학적으로 검증된 계수가 아닙니다.`,
 
   // gauge
   gaugeTitle: '배압 상태 게이지',
@@ -53,8 +57,9 @@ const ko = {
   levelNormal: '정상',
   levelCaution: '주의',
   levelDanger: '위험',
-  gaugeThresholds: `시연용 임계값: ${T.caution} 미만 정상 · ${T.caution}~${T.danger} 주의 · ${T.danger} 초과 위험 (mmH₂O)`,
-  gaugeDisclaimer: '상태 표시는 시연용 임계값에 따른 것이며 세정 필요성을 확정하는 진단 결과가 아닙니다.',
+  gaugeThresholds: (caution: number, danger: number) =>
+    `키트 GT 배압 구간: ${f1(caution)} 미만 정상 · ${f1(caution)}~${f1(danger)} 주의 · ${f1(danger)} 이상 위험 (mmH₂O, DEMO)`,
+  gaugeDisclaimer: '상태 표시는 키트 DEMO 구간에 따른 것이며 세정 필요성을 확정하는 진단 결과가 아닙니다.',
   gaugeNeedsData: '판단에 추가로 필요한 데이터',
   gaugeNeedsList: ['운전 부하 조건', '배기가스 온도 추이', '설비 이력 (세정·정비)', '설계 조건 (설계 배압·유량)'],
   gaugeContext: '참고 입력값',
@@ -110,8 +115,8 @@ const ko = {
 
   // cleaning
   cleanTitle: '세정 방식별 비용·편익 비교',
-  cleanSubtitle: '가상 세정 비용과 가상 월간 편익 (단위: 백만원)',
-  cleanNotice: '실제 견적 또는 검증된 경제성 자료가 아닙니다. 업체 견적·실측 편익 확보 후 교체해야 합니다.',
+  cleanSubtitle: '키트 세정 공법 4개 — 총투자와 월간 편익 (단위: 백만원)',
+  cleanNotice: '키트 DEMO 데이터이며 실제 견적 또는 검증된 경제성 자료가 아닙니다. 「회수기간이 가장 짧은 공법」은 가정 기준이며 추천이 아닙니다.',
   cleanCost: '세정 비용',
   cleanBenefit: '월간 편익',
   cleanMethod: '세정 방식',
@@ -149,35 +154,35 @@ const en: CalcStrings = {
   exampleNote: 'Provisional formula · actual unit performance and loss must be verified',
 
   kpiCurrentBp: 'Current back pressure',
-  kpiDeltaBp: 'Excess over reference',
+  kpiDeltaBp: 'Excess pressure (max of GT BP / HRSG ΔP)',
   kpiPowerLoss: 'Est. power loss',
   kpiMonthlyLoss: 'Monthly economic loss (example)',
-  kpiCurrentBpNote: 'Status by demo thresholds',
-  kpiDeltaBpNote: (ref: string) => `vs. reference ${ref} mmH₂O`,
-  kpiPowerLossNote: `Excess × provisional ${K} MW/mmH₂O`,
+  kpiCurrentBpNote: 'Overall status by kit GT-class indicators',
+  kpiDeltaBpNote: (ref: string) => `vs reference ${ref} mmH₂O and HRSG ΔP design — the larger excess`,
+  kpiPowerLossNote: `GT rating × ${K.gt_loss_pct_per_mbar} %/mbar × excess + ST rating × ${K.st_loss_pct_per_c} %/°C × stack excess`,
   won: 'KRW',
   invalidInput: 'Check inputs',
 
   inputsTitle: 'Calculator inputs',
-  inputsSubtitle: 'KPIs, gauge and charts update instantly.',
+  inputsSubtitle: 'Editing hides results until you re-evaluate.',
   hrsgClass: 'HRSG class',
   classCapacityNote: (mw: number) => `Applies demo capacity ${mw} MW — not an official rating of any real unit`,
   reset: 'Reset to defaults',
   range: (min: string, max: string) => `Allowed ${min} – ${max}`,
-  errEmpty: 'Enter a value.',
-  errNan: 'Numbers only.',
+  errEmpty: 'Enter a valid number.',
+  errNan: 'Enter a valid number.',
   errNegative: 'Negative values are not allowed.',
   errMin: (min: string) => `Must be ≥ ${min}.`,
   errMax: (max: string) => `Must be ≤ ${max}.`,
   errorSummary: (n: number) => `${n} input error(s) — dependent results are on hold.`,
 
   resultTitle: 'Calculation result',
-  resultSubtitle: 'Step-by-step formulas from the central engine (src/lib/calc.ts)',
+  resultSubtitle: 'Step-by-step results from the kit formulas (hrsg_calc_kit_team1 via calc_adapter)',
   stepDelta: 'Back-pressure excess',
   stepPower: 'Power loss (example)',
   stepMonthly: 'Monthly loss (example)',
   stepPending: 'On hold — invalid input',
-  coeffNote: `${K} is a provisional demo coefficient, not an engineering-validated value.`,
+  coeffNote: `Loss coefficients ${K.gt_loss_pct_per_mbar} %/mbar and ${K.st_loss_pct_per_c} %/°C are the kit's DEMO values, not engineering-validated.`,
 
   gaugeTitle: 'Back-pressure gauge',
   gaugeSubtitle: 'Current vs. reference back pressure',
@@ -187,8 +192,9 @@ const en: CalcStrings = {
   levelNormal: 'Normal',
   levelCaution: 'Caution',
   levelDanger: 'Danger',
-  gaugeThresholds: `Demo thresholds: < ${T.caution} normal · ${T.caution}–${T.danger} caution · > ${T.danger} danger (mmH₂O)`,
-  gaugeDisclaimer: 'Status reflects demo thresholds only — it is not a diagnosis confirming the need for cleaning.',
+  gaugeThresholds: (caution: number, danger: number) =>
+    `Kit GT back-pressure bands: < ${f1(caution)} normal · ${f1(caution)}–${f1(danger)} caution · ≥ ${f1(danger)} danger (mmH₂O, DEMO)`,
+  gaugeDisclaimer: 'Status reflects the kit DEMO bands only — it is not a diagnosis confirming the need for cleaning.',
   gaugeNeedsData: 'Additional data required for judgement',
   gaugeNeedsList: ['Operating load', 'Stack gas temperature trend', 'Equipment history (cleaning, maintenance)', 'Design conditions (design ΔP, flow)'],
   gaugeContext: 'Context inputs',
@@ -240,7 +246,7 @@ const en: CalcStrings = {
   mockEntered: 'Mock value entered · not measured',
 
   cleanTitle: 'Cleaning method cost vs. benefit',
-  cleanSubtitle: 'Mock cleaning cost and mock monthly benefit (KRW million)',
+  cleanSubtitle: 'Kit cleaning methods (4) — total investment and monthly benefit (KRW million)',
   cleanNotice: 'Not actual quotes or validated economics. Replace after obtaining vendor quotes and measured benefits.',
   cleanCost: 'Cleaning cost',
   cleanBenefit: 'Monthly benefit',

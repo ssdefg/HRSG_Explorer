@@ -9,7 +9,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test": "node scripts/run-tests.mjs"
+    "test": "node scripts/run-tests.mjs",
+    "kit:test": "node --test hrsg_calc_kit_team1/calc.test.mjs hrsg_calc_kit_team1/checklist.test.mjs",
+    "kit:sample": "node scripts/run-ts.mjs scripts/kit-adapter-sample.ts",
+    "eval:dev": "node hrsg_eval_set_v1/App/tools/hybrid/eval_dev.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

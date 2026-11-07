@@ -3,6 +3,7 @@
 export type Lang = 'ko' | 'en';
 export type ThemeMode = 'light' | 'dark';
 
+/** validation = 세정 전후 화면 (URL 해시는 #before-after) */
 export type TabId = 'dashboard' | 'calculator' | 'checklist' | 'validation';
 
 /** 실제 운전 상태 (설비 상태). 데이터 신뢰성과 별개다. */
@@ -18,10 +19,16 @@ export type DataType =
   | 'planned'       // 연동 예정
   | 'scenario'      // 가상 시나리오
   | 'measured'      // 실측 데이터 (사용자 입력 — 검증 전)
-  | 'userInput';    // 사용자 입력 (출처 미확인 — 실측 여부 모름)
+  | 'userInput'     // 사용자 입력 (출처 미확인 — 실측 여부 모름)
+  | 'literature'    // 공개문헌 참고
+  | 'notComputable' // 산출 불가
+  | 'stale';        // 재평가 필요 (입력 변경 후 재계산 전)
 
 /** 데이터 요청 항목의 수령 상태. 검토 여부(체크박스)와 별개로 관리한다. */
-export type ReceiptStatus = 'noMeasured' | 'requestNeeded' | 'received' | 'needsVerification';
+/** 데이터 수급 상태 — 키트 supply 키 (실측 미입력 · 요청 필요 · 수령 완료 · 검증 필요 · 해당 없음). 검토 여부와 별개 */
+export type ReceiptStatus = 'not_entered' | 'requested' | 'received' | 'verify_needed' | 'na';
+/** 데이터 검증 상태 — 키트 verify 키 */
+export type VerifyStatus = 'unverified' | 'in_progress' | 'verified' | 'failed';
 
 export type Localized = Record<Lang, string>;
 

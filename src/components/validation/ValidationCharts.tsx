@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
+  Area,
   CartesianGrid,
   ComposedChart,
   Line,
-  LineChart,
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
-  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -17,7 +16,7 @@ import { Card, DataTypeBadges, SegmentedToggle } from '@/components/ui';
 import { useAppSettings } from '@/context/AppSettings';
 import { useMeasurements } from '@/context/Workspace';
 import { formatNumber } from '@/lib/format';
-import { buildCumulativeNetBenefit } from '@/lib/calc';
+import { buildCumulativeBenefit } from '@/lib/calc';
 import type { CalculatorState } from '@/context/Workspace';
 import { VALIDATION_SCENARIO, buildScenarioSeries, type SeriesMetric } from '@/data/validationScenario';
 
@@ -39,10 +38,11 @@ const TXT = {
     day: (d: number) => (d > 0 ? `세정 후 ${d}일` : `세정 전 ${-d}일`),
     gapNote: '세정일(0일)은 작업·정지 구간으로 보고 값을 두지 않았습니다. 측정값이 없는 구간은 측정값으로 채우지 않습니다.',
     cumTitle: '누적 순편익 및 손익분기 (예시 계산)',
-    cumSub: '일일 순증분 편익 × 경과일(정지일 이후) − 초기 투자 · 계산기 입력값 기준',
+    cumSub: '일일 순증분 편익 × 경과일 vs 총 세정비용(초기 투자) 기준선 · 교차점 = 손익분기',
     cumEmpty: '입력값 오류 또는 편익 0 이하로 누적 순편익을 산출할 수 없습니다 (산출 불가).',
     beyond: (d: string) => `손익분기 ${d}일 — 표시 구간(60일)을 벗어납니다.`,
-    cumY: '누적 순편익 (백만원)',
+    cumY: '누적 금액 (백만원)',
+    costLine: (v: string) => `총 세정비용 ${v}백만원`,
     cumX: '세정 후 경과일 (일)',
     cumSeries: '누적 순편익',
     breakEven: (d: string) => `손익분기 ${d}일`,
@@ -64,10 +64,11 @@ const TXT = {
     day: (d: number) => (d > 0 ? `${d} d after cleaning` : `${-d} d before cleaning`),
     gapNote: 'Cleaning day (0) is treated as work/outage and has no value. Periods without measurements are not filled with measured data.',
     cumTitle: 'Cumulative net benefit & break-even (example calc)',
-    cumSub: 'Daily incremental benefit × days (after shutdown) − initial investment · from calculator inputs',
+    cumSub: 'Daily incremental benefit × days vs total cleaning cost (initial investment) · crossing = break-even',
     cumEmpty: 'Cannot compute cumulative benefit — invalid inputs or benefit ≤ 0 (not computable).',
     beyond: (d: string) => `Break-even ${d} d — beyond the 60-day window shown.`,
-    cumY: 'Cumulative net (KRW M)',
+    cumY: 'Cumulative (KRW M)',
+    costLine: (v: string) => `Total cleaning cost ${v} M`,
     cumX: 'Days after cleaning (d)',
     cumSeries: 'Cumulative net benefit',
     breakEven: (d: string) => `Break-even ${d} d`,
@@ -88,7 +89,8 @@ export function TimeSeriesCard() {
   const after = series.filter((p) => p.day > 0);
   const measured = entries
     .filter((e) => e[metric] !== null)
-    .map((e) => ({ day: e.day, value: e[metric] as number }));
+    .map((e) => ({ day: e.day, value: e[metric] as number }))
+    .sort((a, b) => a.day - b.day);
   const label = metric === 'backPressure' ? x.bp : x.temp;
   const unit = UNIT[metric];
 
@@ -140,7 +142,7 @@ export function TimeSeriesCard() {
       <div className="chart-box" role="img" aria-label={`${x.tsTitle}: ${label} (${unit})`}>
         <ResponsiveContainer width="100%" height={280}>
           <ComposedChart margin={{ top: 8, right: 16, bottom: 22, left: 4 }}>
-            <CartesianGrid stroke="var(--c-line)" vertical={false} />
+            <CartesianGrid stroke="var(--c-chart-grid)" vertical={false} />
             <XAxis
               dataKey="day"
               type="number"
@@ -163,22 +165,22 @@ export function TimeSeriesCard() {
             <Tooltip content={renderTip} cursor={{ stroke: 'var(--c-line-strong)', strokeDasharray: '3 3' }} />
             <ReferenceLine
               x={0}
-              stroke="var(--c-accent)"
+              stroke="var(--c-ink-2)"
               strokeWidth={1.5}
               strokeDasharray="4 3"
-              label={{ value: x.cleaning, position: 'insideTopRight', fill: 'var(--c-accent-ink)', fontSize: 11, fontWeight: 600 }}
+              label={{ value: x.cleaning, position: 'insideTopRight', fill: 'var(--c-ink-2)', fontSize: 11, fontWeight: 600 }}
             />
-            <Line data={before} dataKey={metric} name={x.scenario} stroke="var(--c-chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line data={after} dataKey={metric} name={x.scenario} stroke="var(--c-chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            {/* 가상 시나리오 기준선 = 점선 · 사용자 실측값 = 실선 + 포인트 (가이드 §2.5) */}
+            <Line data={before} dataKey={metric} name={x.scenario} stroke="var(--c-chart-2)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+            <Line data={after} dataKey={metric} name={x.scenario} stroke="var(--c-chart-2)" strokeWidth={1.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} />
             {measured.length > 0 && (
-              <Scatter
+              <Line
                 data={measured}
                 dataKey="value"
                 name={x.measured}
-                fill="var(--c-ink)"
-                stroke="var(--c-surface)"
-                strokeWidth={2}
-                shape="diamond"
+                stroke="var(--c-chart-main)"
+                strokeWidth={2.5}
+                dot={{ r: 4, fill: 'var(--c-chart-main)', stroke: 'var(--c-surface)', strokeWidth: 2 }}
                 isAnimationActive={false}
               />
             )}
@@ -187,17 +189,17 @@ export function TimeSeriesCard() {
       </div>
       <div className="chart-key">
         <span className="chart-key__item">
-          <span className="chart-key__line chart-key__line--series" aria-hidden="true" />
+          <span className="chart-key__line chart-key__line--ref" aria-hidden="true" />
           {x.scenario}
           <DataTypeBadges types={['scenario']} />
         </span>
         <span className="chart-key__item">
-          <span className="chart-key__diamond" aria-hidden="true" />
+          <span className="chart-key__line chart-key__line--main chart-key__line--dot" aria-hidden="true" />
           {x.measured}
           {measured.length === 0 ? <DataTypeBadges types={['noMeasured']} /> : <DataTypeBadges types={['measured']} />}
         </span>
         <span className="chart-key__item">
-          <span className="chart-key__line chart-key__line--cur" aria-hidden="true" />
+          <span className="chart-key__line chart-key__line--ref" aria-hidden="true" />
           {x.cleaning}
         </span>
       </div>
@@ -214,22 +216,21 @@ export function CumulativeBenefitCard({ state }: { state: CalculatorState }) {
   const m = state.metrics;
   // 중앙 계산 엔진의 초기 투자·일일 순증분 편익·정지일수로만 그린다 (별도 하드코딩 값 없음)
   const ok = m.initialInvestmentKrw.status === 'ok' && m.monthlyIncrementalBenefitKrw.status === 'ok';
-  const data = ok
-    ? buildCumulativeNetBenefit(m.initialInvestmentKrw.value, state.cleaning.dailyIncrementalBenefitKrw, state.values.shutdownDays, s.daysAfter)
-    : [];
+  const data = ok ? buildCumulativeBenefit(state.cleaning.dailyIncrementalBenefitKrw, s.daysAfter) : [];
+  const costM = ok && m.initialInvestmentKrw.value !== null ? m.initialInvestmentKrw.value / 1e6 : null;
   const be = m.breakEvenDays.status === 'ok' ? m.breakEvenDays.value : null;
   const beText = be === null ? '—' : formatNumber(be, lang, 1);
   const daily = state.cleaning.dailyIncrementalBenefitKrw;
 
   const renderTip = ({ active, payload }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
-    const p = payload[0].payload as { day: number; netMillionKrw: number };
+    const p = payload[0].payload as { day: number; benefitMillionKrw: number };
     return (
       <div className="chart-tip">
         <div className="chart-tip__head">{x.day(p.day)}</div>
         <div className="chart-tip__row">
-          <span className="chart-tip__swatch chart-tip__swatch--series" aria-hidden="true" />
-          {x.cumSeries}: <strong className="num">{formatNumber(p.netMillionKrw, lang, 2)}</strong> {x.million}
+          <span className="chart-tip__swatch chart-tip__swatch--main" aria-hidden="true" />
+          {x.cumSeries}: <strong className="num">{formatNumber(p.benefitMillionKrw, lang, 2)}</strong> {x.million}
         </div>
         <DataTypeBadges types={['mock', 'example']} />
       </div>
@@ -243,8 +244,14 @@ export function CumulativeBenefitCard({ state }: { state: CalculatorState }) {
       ) : (
         <div className="chart-box" role="img" aria-label={`${x.cumTitle} — ${x.breakEven(beText)}`}>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={data} margin={{ top: 8, right: 16, bottom: 22, left: 4 }}>
-              <CartesianGrid stroke="var(--c-line)" vertical={false} />
+            <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 22, left: 4 }}>
+              <defs>
+                <linearGradient id="cum-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--c-chart-main)" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="var(--c-chart-main)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="var(--c-chart-grid)" vertical={false} />
               <XAxis
                 dataKey="day"
                 type="number"
@@ -264,7 +271,14 @@ export function CumulativeBenefitCard({ state }: { state: CalculatorState }) {
                 label={{ value: x.cumY, angle: -90, position: 'insideLeft', offset: 12, dy: 60, fill: 'var(--c-ink-2)', fontSize: 12 }}
               />
               <Tooltip content={renderTip} cursor={{ stroke: 'var(--c-line-strong)', strokeDasharray: '3 3' }} />
-              <ReferenceLine y={0} stroke="var(--c-ink-2)" />
+              {costM !== null && (
+                <ReferenceLine
+                  y={costM}
+                  stroke="var(--c-ink-2)"
+                  strokeDasharray="5 4"
+                  label={{ value: x.costLine(formatNumber(costM, lang, 1)), position: 'insideBottomRight', fill: 'var(--c-ink-2)', fontSize: 11 }}
+                />
+              )}
               {be !== null && be <= s.daysAfter && (
                 <ReferenceLine
                   x={be}
@@ -273,9 +287,9 @@ export function CumulativeBenefitCard({ state }: { state: CalculatorState }) {
                   label={{ value: x.breakEven(beText), position: 'insideTopLeft', fill: 'var(--c-accent-ink)', fontSize: 11, fontWeight: 600 }}
                 />
               )}
-              <Line type="linear" dataKey="netMillionKrw" name={x.cumSeries} stroke="var(--c-chart-2)" strokeWidth={2} dot={false} isAnimationActive={false} />
-              {be !== null && be <= s.daysAfter && <ReferenceDot x={be} y={0} r={6} fill="var(--c-accent)" stroke="var(--c-surface)" strokeWidth={2} />}
-            </LineChart>
+              <Area type="linear" dataKey="benefitMillionKrw" name={x.cumSeries} stroke="var(--c-chart-main)" strokeWidth={2.5} fill="url(#cum-fill)" dot={false} isAnimationActive={false} />
+              {be !== null && be <= s.daysAfter && costM !== null && <ReferenceDot x={be} y={costM} r={6} fill="var(--c-accent)" stroke="var(--c-surface)" strokeWidth={2} />}
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}

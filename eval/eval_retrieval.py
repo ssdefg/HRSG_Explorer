@@ -1,6 +1,9 @@
 """검색 정량 평가: BM25 단독(A) vs 하이브리드(B: BGE-M3 + BM25 + 가중 RRF + 문헌당 2개)의 Recall@8 · MRR.
 
-사용법:  python eval/eval_retrieval.py [평가셋.json]      (기본 eval/mock_eval_dataset.json)
+사용법:  python eval/eval_retrieval.py [평가셋.json] [--include-test]      (기본 eval/mock_eval_dataset.json)
+
+test 분할 보호: 기본은 dev 문항만 불러오고 test 문항은 검색도 하지 않는다 (점수가 화면에 나오지 않게).
+test 는 설정을 확정한 뒤 --include-test 로 한 번만 측정한다 (hrsg_eval_set_v1/CLAUDE.md 규칙).
 평가셋:  {"questions": [{id, query, lang, target_doc_ids, split, answerable}, ...]}
 
 정답 판정 기준 (협업안 7쪽): 문헌 단위 — 상위 8개 문단 중 정답 문헌의 아무 문단이 있으면 맞힌 것으로 본다.
@@ -49,8 +52,15 @@ def metrics(top_docs: list[str], gold: set[str]) -> tuple[float, float]:
 
 
 def main() -> int:
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "eval" / "mock_eval_dataset.json"
+    files = [a for a in sys.argv[1:] if not a.startswith("--")]
+    include_test = "--include-test" in sys.argv
+    path = Path(files[0]) if files else ROOT / "eval" / "mock_eval_dataset.json"
     questions = json.loads(path.read_text(encoding="utf-8"))["questions"]
+    if not include_test:
+        n_test = sum(1 for q in questions if q.get("split") == "test")
+        questions = [q for q in questions if q.get("split") != "test"]
+        if n_test:
+            print(f"[dev 전용] test 분할 {n_test}문항은 불러오지 않았습니다. 설정 확정 뒤 --include-test 로 한 번만 측정하세요.")
     r = HybridRetriever()
     meta = r.metadata
 
@@ -85,9 +95,10 @@ def main() -> int:
         "전체": lambda q: True,
         "한국어": lambda q: q["lang"] == "ko",
         "영어": lambda q: q["lang"] == "en",
-        "test": lambda q: q["split"] == "test",
         "dev": lambda q: q["split"] == "dev",
     }
+    if include_test:
+        groups["test"] = lambda q: q["split"] == "test"
 
     def agg(name: str, g) -> tuple[int, float, float]:
         rows = [(rec, rr) for q, m, rec, rr, _ in per_q if m == name and g(q)]
@@ -104,10 +115,11 @@ def main() -> int:
         print(f"{gname:<6} {n:>3} | {ra:>10.3f} {ma:>7.3f} | {rb:>10.3f} {mb:>7.3f} | {rb - ra:>+8.3f} {mb - ma:>+7.3f}")
 
     print(f"\n[원인 분석] 방식별 Recall@8 / MRR")
-    print(f"{'방식':<40} " + "  ".join(f"{g:>13}" for g in ("전체", "한국어", "영어", "test")))
+    cols = ("전체", "한국어", "영어", "test" if include_test else "dev")
+    print(f"{'방식':<40} " + "  ".join(f"{g:>13}" for g in cols))
     for name in methods:
         cells = []
-        for gname in ("전체", "한국어", "영어", "test"):
+        for gname in cols:
             _, rec, mrr = agg(name, groups[gname])
             cells.append(f"{rec:.3f}/{mrr:.3f}")
         print(f"{name:<40} " + "  ".join(f"{c:>13}" for c in cells))

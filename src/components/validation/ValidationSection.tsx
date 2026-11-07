@@ -8,6 +8,7 @@ import { VALIDATION_SCENARIO, type SeriesMetric } from '@/data/validationScenari
 import { SECTION_IDS } from '@/data/tabs';
 import { CumulativeBenefitCard, TimeSeriesCard } from './ValidationCharts';
 import { MeasuredInput } from './MeasuredInput';
+import { ConditionGuard } from './ConditionGuard';
 import { fmtMetric, MetricStatusTag } from '@/components/calculator/metricText';
 
 const TXT = {
@@ -98,7 +99,7 @@ type Txt = (typeof TXT)['ko'];
 /** 사용자 입력 측정값의 세정 전·후 평균 (엔진 mean 사용) */
 function measuredSummary(entries: MeasuredEntry[], metric: SeriesMetric) {
   const pre = entries.filter((e) => e.day < 0).map((e) => e[metric]);
-  const post = entries.filter((e) => e.day > 0).map((e) => e[metric]);
+  const post = entries.filter((e) => e.day >= 0).map((e) => e[metric]);
   const n = [...pre, ...post].filter((v) => v !== null).length;
   return { before: mean(pre), after: mean(post), n };
 }
@@ -294,6 +295,7 @@ export function ValidationSection({ state }: { state: CalculatorState }) {
           <CumulativeBenefitCard state={state} />
           <TimeSeriesCard />
           <MeasuredInput />
+          <ConditionGuard />
 
           <Card span={2} title={x.sourcesTitle}>
             <div className="table-wrap">

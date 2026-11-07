@@ -1,9 +1,10 @@
 /* ==========================================================================
-   Design tokens — Industrial Intelligence (Navy base · Orange accent)
+   Design tokens — Engineering monitoring dashboard (Safety Orange accent)
    1층: --palette-* 원색 정의 (테마 무관, 여기서만 hex 사용)
-   2층: --c-* 역할 토큰 — 라이트는 :root, 다크는 같은 이름만 재정의한다.
-   규칙: 오렌지는 브랜드 액센트(인터랙션·AI 답변 선·활성 탭·포커스) 전용.
-         운전 상태(정상/주의/경고/트립)는 별도의 Green·Amber·Red 기능색을 쓴다.
+   2층: --c-* 역할 토큰 — 라이트(기본)는 :root, 다크는 [data-theme='dark'] 에서 같은 이름만 재정의한다.
+   규칙: 오렌지는 핵심 강조색 — 활성 메뉴·단계·차트 메인 라인·게이지 채움·포커스.
+         상태 경보는 Danger(적색) · Warning(오렌지) · Normal(녹색). Warning 은 브랜드 오렌지와 같은 계열이므로
+         상태를 나타낼 때는 항상 점·글자 라벨을 함께 쓴다 (색만으로 구분하지 않음).
    ========================================================================== */
 
 :root {
@@ -13,15 +14,17 @@
   --palette-slate-900: #0f172a;    /* Light-mode text */
   --palette-slate-200: #e2e8f0;    /* Light-mode border */
   --palette-slate-50: #f8fafc;
-  --palette-cool-gray-100: #f4f5f7; /* Light-mode app background — 흰 카드가 떠 보이도록 한 단계 어둡게 */
+  --palette-slate-100: #f1f5f9;     /* Light-mode canvas — 흰 카드가 떠 보이도록 */
   --palette-white: #ffffff;
   --palette-orange-600: #ea580c;   /* Vibrant Orange — lines, borders, large numbers */
-  --palette-orange-400: #fb923c;   /* Soft Orange — dark-mode accent */
+  --palette-orange-500: #f97316;   /* Neon Orange — dark-mode accent lines */
+  --palette-orange-400: #fb923c;   /* Soft Orange — dark-mode small text */
+  --palette-orange-50: #fff7ed;    /* Light-mode active menu background */
   --palette-orange-700: #c2410c;   /* Deep Orange — light-mode small text only (5.2:1 on #FFF) */
   --palette-yellow-100: #fef9c3;   /* Pale Yellow — insight tint (light: background only) */
 
   /* ---- Surfaces & lines -------------------------------------------------- */
-  --c-bg: var(--palette-cool-gray-100);
+  --c-bg: var(--palette-slate-100);
   --c-surface: var(--palette-white);
   --c-surface-2: #f1f5f9;
   --c-surface-sunken: #eef2f6;
@@ -34,13 +37,18 @@
   --c-ink-3: #5e6b80;        /* captions — 4.9:1 on #F1F5F9, 5.4:1 on #FFF (WCAG AA) */
   --c-label: #64748b;        /* KPI 카드 제목 — 4.8:1 on #FFF */
 
-  /* ---- Sidebar (navy in both themes) ------------------------------------- */
-  --c-header-bg: var(--palette-navy-900);
-  --c-header-ink: var(--palette-slate-50);
-  --c-header-ink-2: rgba(248, 250, 252, 0.66);
-  --c-header-line: rgba(248, 250, 252, 0.1);
-  --c-header-hover: rgba(248, 250, 252, 0.05);
-  --c-header-active: rgba(248, 250, 252, 0.08);
+  /* ---- Sidebar — 라이트: 흰 배경 + 슬레이트 글자, 활성 메뉴는 orange-50 + 진한 오렌지 ---- */
+  --c-header-bg: var(--palette-white);
+  --c-header-ink: var(--palette-slate-900);
+  --c-header-ink-2: #64748b;
+  --c-header-line: var(--palette-slate-200);
+  --c-header-hover: var(--palette-slate-50);
+  --c-header-active: var(--palette-orange-50);
+  --c-nav-active-ink: var(--palette-orange-700);   /* text-orange-600 계열 — 작은 글자 대비 5.2:1 */
+
+  /* 사용자 말풍선 등 진한 면 (사이드바 색과 분리) */
+  --c-solid-bg: var(--palette-navy-900);
+  --c-solid-ink: var(--palette-slate-50);
 
   /* ---- Controls ---------------------------------------------------------- */
   --c-control-active: var(--palette-white);   /* 세그먼트 토글 선택 칸 (트랙은 surface-2) */
@@ -49,7 +57,7 @@
   /* ---- Brand accent (orange — interaction only) -------------------------- */
   --c-accent: var(--palette-orange-600);      /* lines, borders, focus, large numbers */
   --c-accent-ink: var(--palette-orange-700);  /* small orange text, links, button labels */
-  --c-accent-soft: rgba(234, 88, 12, 0.08);   /* hover / selected tint */
+  --c-accent-soft: rgba(249, 115, 22, 0.1);   /* hover / selected tint (bg-orange-50 수준) */
   --c-focus: var(--palette-orange-600);
 
   /* Primary CTA — 면 채우기 없는 outline: surface + 1px accent 테두리 + accent-ink 글자.
@@ -64,19 +72,25 @@
   --c-insight-ink: var(--c-ink);
   --c-insight-line: rgba(161, 98, 7, 0.45);
 
-  /* ---- Operational status (separate functional scale, not brand) --------- */
+  /* ---- Status — Normal 녹색 · Warning(주의) 오렌지 · Danger(경고/위험) 적색 ---- */
   --c-normal: #16a34a;
-  --c-caution: #d97706;
+  --c-caution: #ea580c;
   --c-warning: #dc2626;
 
   --c-normal-bg: rgba(22, 163, 74, 0.1);
   --c-normal-ink: #15803d;   /* 5.0:1 on #FFF */
-  --c-caution-bg: rgba(217, 119, 6, 0.12);
-  --c-caution-ink: #b45309;  /* 5.0:1 on #FFF */
+  --c-caution-bg: rgba(249, 115, 22, 0.1);
+  --c-caution-ink: #c2410c;  /* 5.2:1 on #FFF */
   --c-warning-bg: rgba(220, 38, 38, 0.1);
   --c-warning-ink: #b91c1c;  /* 6.5:1 on #FFF */
   --c-trip-bg: #dc2626;
   --c-trip-ink: var(--palette-white);   /* 4.8:1 */
+
+  /* ---- Reliability badges (가이드 §2.1) — 글자·외곽선만, 면 채우기 없음 ---- */
+  --c-rel-purple: #7c3aed;   /* 가상 · 5.7:1 on #FFF */
+  --c-rel-blue: #1d4ed8;     /* 사용자 입력 · 6.7:1 */
+  --c-rel-green: #15803d;    /* 공개문헌 참고 · 5.0:1 */
+  --c-rel-orange: #c2410c;   /* 미확정 · 5.2:1 (브랜드 작은 글자 토큰과 같은 값) */
 
   /* ---- Data-reliability badges — neutral slate, never status/brand ------- */
   --c-data-ink: #475569;
@@ -86,10 +100,14 @@
   --c-data-impl-line: rgba(30, 41, 59, 0.5);
   --c-data-impl-bg: rgba(30, 41, 59, 0.06);
 
-  /* ---- Charts: neutral series, orange only for points / current marker --- */
-  --c-chart-1: #94a3b8;      /* 세정 비용 — light slate */
-  --c-chart-2: #334155;      /* 월간 편익 · 손실 곡선 — deep slate (lightness contrast, CVD-safe) */
+  /* ---- Charts — 메인 라인·게이지 채움은 오렌지, 비교 계열은 슬레이트 ------------- */
+  --c-chart-1: #94a3b8;      /* 비교 계열 (세정 비용 등) — light slate */
+  --c-chart-2: #334155;      /* 보조 계열 (가상 시나리오 기준선 등) — deep slate */
+  --c-chart-main: var(--palette-orange-600);   /* 메인 라인 · 게이지 채움 · 바늘 */
+  --c-chart-fill-top: rgba(234, 88, 12, 0.22); /* 영역 그라디언트 상단 → 하단 0 */
+  --c-chart-grid: rgba(0, 0, 0, 0.06);
   --c-chart-point: var(--palette-orange-600);
+  --c-track: #e2e8f0;        /* 게이지·프로그레스 미채움 트랙 */
 
   /* ---- Typography -------------------------------------------------------- */
   --font-sans: 'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
@@ -101,13 +119,13 @@
   --fs-md: 0.9375rem; /* 15 */
   --fs-lg: 1.125rem;  /* 18 */
   --fs-xl: 1.5rem;    /* 24 */
-  --fs-kpi: 2rem;     /* 32 */
+  --fs-kpi: 2rem;     /* 32 — 메트릭 값 (28~36px) */
 
   /* ---- Shape & depth (minimal shadows) ----------------------------------- */
   --radius-sm: 6px;
   --radius: 10px;     /* cards: 8~12px 범위 내 통일 */
   --radius-pill: 999px;
-  --shadow-card: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 2px 0 rgba(15, 23, 42, 0.05), 0 1px 3px 0 rgba(15, 23, 42, 0.04);   /* shadow-sm */
   --shadow-raised: 0 4px 12px rgba(15, 23, 42, 0.08);
 
   /* ---- Spacing ----------------------------------------------------------- */
@@ -126,45 +144,59 @@
 }
 
 :root[data-theme='dark'] {
-  --c-bg: var(--palette-navy-950);
-  --c-surface: var(--palette-navy-900);
-  --c-surface-2: #1e293b;
-  --c-surface-sunken: #0b1222;
+  --c-bg: #0b0f15;
+  --c-surface: #151b26;
+  --c-surface-2: #1c2431;
+  --c-surface-sunken: #0e131b;
   --c-line: rgba(255, 255, 255, 0.08);
   --c-line-strong: rgba(255, 255, 255, 0.14);
 
-  --c-ink: var(--palette-slate-200);   /* 13:1 on #111827 */
-  --c-ink-2: #94a3b8;                  /* 6.9:1 on #111827 */
-  --c-ink-3: #8a98ad;                  /* 5.0:1 on #1E293B */
-  --c-label: #94a3b8;
+  --c-ink: #f3f4f6;                    /* 15:1 on #151B26 */
+  --c-ink-2: #9ca3af;                  /* 6.9:1 on #151B26 */
+  --c-ink-3: #8b95a5;                  /* 5.3:1 on #151B26 */
+  --c-label: #9ca3af;
 
-  /* 사이드바는 surface(#111827) — 페이지 배경(#020617)과 구획 */
+  /* 사이드바 #0E131B + 뮤트 그레이 · 활성 메뉴 오렌지 캡슐 */
+  --c-header-bg: #0e131b;
+  --c-header-ink: #f3f4f6;
+  --c-header-ink-2: #9ca3af;
   --c-header-line: rgba(255, 255, 255, 0.08);
+  --c-header-hover: rgba(255, 255, 255, 0.04);
+  --c-header-active: rgba(249, 115, 22, 0.15);
+  --c-nav-active-ink: var(--palette-orange-400);
 
-  --c-control-active: #334155;   /* 트랙(#1E293B)보다 한 단계 밝게 */
+  --c-solid-bg: #1c2431;
+  --c-solid-ink: #f3f4f6;
+
+  --c-control-active: #2a3444;   /* 트랙(#1C2431)보다 한 단계 밝게 */
   --c-backdrop: rgba(2, 6, 23, 0.65);
 
-  --c-accent: var(--palette-orange-400);
-  --c-accent-ink: var(--palette-orange-400);  /* 7.6:1 on #111827 · 5.8:1 on hover tint */
-  --c-accent-soft: rgba(251, 146, 60, 0.12);
-  --c-focus: var(--palette-orange-400);
+  --c-accent: var(--palette-orange-500);      /* 라인·테두리·게이지 */
+  --c-accent-ink: var(--palette-orange-400);  /* 작은 오렌지 글자 — 7.3:1 on #151B26 */
+  --c-accent-soft: rgba(249, 115, 22, 0.15);
+  --c-focus: var(--palette-orange-500);
 
   --c-insight-bg: rgba(254, 249, 195, 0.08);
   --c-insight-ink: var(--palette-yellow-100);
   --c-insight-line: rgba(254, 249, 195, 0.35);
 
   --c-normal: #4ade80;
-  --c-caution: #fbbf24;
-  --c-warning: #f87171;
+  --c-caution: #f97316;
+  --c-warning: #ef4444;
 
   --c-normal-bg: rgba(74, 222, 128, 0.12);
   --c-normal-ink: #4ade80;
-  --c-caution-bg: rgba(251, 191, 36, 0.12);
-  --c-caution-ink: #fbbf24;
-  --c-warning-bg: rgba(248, 113, 113, 0.12);
+  --c-caution-bg: rgba(249, 115, 22, 0.15);
+  --c-caution-ink: #fb923c;
+  --c-warning-bg: rgba(239, 68, 68, 0.14);
   --c-warning-ink: #f87171;
   --c-trip-bg: #dc2626;
   --c-trip-ink: var(--palette-white);
+
+  --c-rel-purple: #c4b5fd;
+  --c-rel-blue: #93c5fd;
+  --c-rel-green: #4ade80;
+  --c-rel-orange: #fdba74;
 
   --c-data-ink: #b4c0d0;
   --c-data-line: rgba(180, 192, 208, 0.4);
@@ -175,9 +207,13 @@
 
   --c-chart-1: #64748b;
   --c-chart-2: #cbd5e1;
-  --c-chart-point: var(--palette-orange-400);
+  --c-chart-main: var(--palette-orange-500);
+  --c-chart-fill-top: rgba(249, 115, 22, 0.28);
+  --c-chart-grid: rgba(255, 255, 255, 0.06);
+  --c-chart-point: var(--palette-orange-500);
+  --c-track: rgba(255, 255, 255, 0.1);
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-card: none;   /* 다크: 섀도 대신 1px 보더로 구획 */
   --shadow-raised: 0 8px 24px rgba(0, 0, 0, 0.45);
 
   color-scheme: dark;

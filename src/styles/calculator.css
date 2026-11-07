@@ -327,13 +327,17 @@
 }
 
 .gauge__track {
-  stroke: var(--c-surface-2);
+  stroke: var(--c-track);
+}
+/* 현재 값까지의 채움 — 시그니처 오렌지 */
+.gauge__fill {
+  stroke: var(--c-chart-main);
 }
 
-/* 상태 구간(270/300 mmH₂O 기준은 BackpressureGauge·calc.ts 그대로) — 채도를 낮춘 얇은 구간 */
-.gauge__zone--normal { stroke: var(--c-normal); opacity: 0.55; }
-.gauge__zone--caution { stroke: var(--c-caution); opacity: 0.65; }
-.gauge__zone--danger { stroke: var(--c-warning); opacity: 0.65; }
+/* 상태 구간 띠(270/300 mmH₂O 기준은 BackpressureGauge·calc.ts 그대로) — 트랙 바깥 얇은 띠 */
+.gauge__zone--normal { stroke: var(--c-normal); opacity: 0.7; }
+.gauge__zone--caution { stroke: var(--c-caution); opacity: 0.8; }
+.gauge__zone--danger { stroke: var(--c-warning); opacity: 0.8; }
 
 .gauge__ref line {
   stroke: var(--c-ink);
@@ -345,10 +349,12 @@
 }
 
 .gauge__needle line {
-  stroke: var(--c-ink);
+  stroke: var(--c-chart-main);
 }
 .gauge__needle circle {
-  fill: var(--c-ink);
+  fill: var(--c-chart-main);
+  stroke: var(--c-surface);
+  stroke-width: 2;
 }
 
 .gauge__tick {
@@ -558,6 +564,20 @@
 }
 .chart-key__line--ref { border-top: 2px dashed var(--c-ink-2); }
 .chart-key__line--cur { border-top-color: var(--c-accent); }
+/* 메인 계열 — 오렌지 라인 (영역 채움 차트의 범례) */
+.chart-key__line--main { border-top: 2.5px solid var(--c-chart-main); }
+.chart-key__line--dot { position: relative; }
+.chart-key__line--dot::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: -4.5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-chart-main);
+}
+.chart-tip__swatch--main { background: var(--c-chart-main); height: 3px; }
 
 .chart-key__zone {
   width: 12px;
@@ -1024,4 +1044,67 @@
   .needs__list {
     columns: 1;
   }
+}
+
+/* ---- 가이드 §3.1 입력 경고 · 단위 선택 ---- */
+.field--warn .field__control {
+  border-color: var(--c-caution);
+}
+.field__warn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-caution-ink);
+}
+.field__unit--select {
+  border: 0;
+  border-left: 1px solid var(--c-line);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  padding: 0 6px;
+}
+.field__unit--select:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--c-accent-soft);
+}
+
+/* ---- 재평가 필요 덮개 (가이드 §2.3) ---- */
+.stale-cover {
+  position: relative;
+}
+.stale-cover.is-stale .stale-cover__content {
+  filter: blur(4px);
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
+}
+.stale-cover__overlay {
+  position: absolute;
+  top: var(--sp-4);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  border: 1px solid var(--c-caution);
+  border-radius: var(--radius-sm);
+  background: var(--c-surface);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--c-ink);
+}
+
+/* 키트 공법 비교 — 열이 많은 표를 차트 아래 전체 폭으로 */
+.clean-grid--stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+.clean-grid--stack .data-table th,
+.clean-grid--stack .data-table td {
+  white-space: nowrap;
 }

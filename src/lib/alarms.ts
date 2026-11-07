@@ -1,14 +1,15 @@
 /**
  * DEMO 경보 규칙 — 활성 경보 수는 여기 정의된 규칙만 집계한다 (임의의 숫자를 만들지 않는다).
- * 규칙과 임계값은 시연용이며 실제 설비 경보 설정이 아니다.
+ * 판정 구간은 키트 GT 배압 지표(caution · danger, 기준 배압으로 다시 맞춘 값)를 쓴다. 실제 설비 경보 설정이 아니다.
  */
 import type { Localized } from '@/types';
-import { BP_THRESHOLDS } from '@/lib/calc';
 import type { ScenarioSelection } from '@/data/calculatorInputs';
 
 export interface AlarmContext {
   currentBp: number | null;
   scenario: ScenarioSelection;
+  /** 키트 GT 배압 판정 구간 [mmH₂O] (calc.bands) — 없으면 배압 규칙은 판정하지 않는다 */
+  bands: { caution: number } | null;
 }
 
 export interface AlarmRule {
@@ -21,10 +22,10 @@ export const DEMO_ALARM_RULES: AlarmRule[] = [
   {
     id: 'bp-over-caution',
     label: {
-      ko: `현재 배압 ≥ 시연용 주의 임계값 ${BP_THRESHOLDS.caution} mmH₂O`,
-      en: `Current back pressure ≥ demo caution threshold ${BP_THRESHOLDS.caution} mmH₂O`,
+      ko: '현재 GT 배압 ≥ 키트 주의 구간 (GT 등급 지표)',
+      en: 'GT back pressure ≥ kit caution band (GT class indicator)',
     },
-    active: (c) => c.currentBp !== null && c.currentBp >= BP_THRESHOLDS.caution,
+    active: (c) => c.currentBp !== null && c.bands !== null && c.currentBp >= c.bands.caution,
   },
   {
     id: 'trip-scenario',

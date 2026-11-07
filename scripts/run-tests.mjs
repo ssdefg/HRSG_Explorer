@@ -33,6 +33,8 @@ await build({
   format: 'esm',
   target: 'node18',
   tsconfig: join(root, 'tsconfig.app.json'),
+  // 계산기·체크리스트 키트 (vite.config.ts 의 '@kit' 별칭과 같은 위치)
+  alias: { '@kit': join(root, 'hrsg_calc_kit_team1') },
   logLevel: 'warning',
 });
 

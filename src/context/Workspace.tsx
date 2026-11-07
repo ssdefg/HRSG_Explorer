@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Lang, ReceiptStatus } from '@/types';
+import type { Lang, ReceiptStatus, VerifyStatus } from '@/types';
+import type { KitProgress, KitProgressEntry } from '@/lib/kit';
 import { useAppSettings } from '@/context/AppSettings';
 import {
+  LEGACY_STORE_KEY,
   STORE_KEY,
   addCase,
   deleteCase,
@@ -18,19 +20,38 @@ import {
   type CaseData,
   type ChecklistMeta,
   type MeasuredEntry,
+  type Conversation,
+  type OperatingConditions,
   type QaMessage,
   type StoreData,
+  appendToActive,
+  appendToConversation,
+  deleteConversation as deleteConversationIn,
 } from '@/lib/caseStore';
+import type { ContextSnapshot } from '@/lib/aiContext';
+import { readStored, writeStored } from '@/lib/storage';
+
+const CHAT_MODE_KEY = 'hrsg.chatMode';
 import { deriveCalculator, type DerivedCalculator } from '@/lib/calculatorModel';
-import { computeProgress, computeReadiness, type ProgressStats, type Readiness } from '@/lib/checklistStats';
-import { DEMO_SCENARIOS, hrsgClassDef, type HrsgClass, type NumericInputId, type ScenarioId, type ScenarioSelection } from '@/data/calculatorInputs';
-import type { ChecklistCategory } from '@/data/checklistItems';
-import { QA_PRESETS, type QaPresetId } from '@/data/qaPresets';
-import { matchQuestion } from '@/lib/qaMatch';
+import { computeProgress, computeReadiness, statusNeedsValue, type ProgressStats, type Readiness } from '@/lib/checklistStats';
+import {
+  scenarioValues,
+  INPUT_DEF,
+  hrsgClassDef,
+  unitDef,
+  type HrsgClass,
+  type NumericInputId,
+  type ScenarioId,
+  type ScenarioSelection,
+} from '@/data/calculatorInputs';
+import { parseNumericInput } from '@/lib/number';
+import { kitDefaultValues } from '@/lib/calc_adapter';
+import { maskSensitive } from '@/lib/privacy';
+import { CHECKLIST_CATEGORIES, CHECKLIST_ITEMS, type ChecklistCategory } from '@/data/checklistItems';
 import { askRag } from '@/lib/ragClient';
 import type { EvaluationMode } from '@/lib/calc';
 
-export type { MeasuredEntry, QaMessage, AnalysisSnapshot } from '@/lib/caseStore';
+export type { MeasuredEntry, QaMessage, AnalysisSnapshot, OperatingConditions, Conversation } from '@/lib/caseStore';
 
 /**
  * 케이스 기반 작업 상태 — 모든 화면이 같은 원본 데이터를 참조한다.
@@ -38,13 +59,15 @@ export type { MeasuredEntry, QaMessage, AnalysisSnapshot } from '@/lib/caseStore
  */
 
 /* ---- 저장 ---------------------------------------------------------------- */
-export type SaveStatus = 'idle' | 'saved' | 'quota' | 'unavailable' | 'error';
+/** pending: 변경 후 저장 대기 (디바운스 중) */
+export type SaveStatus = 'idle' | 'pending' | 'saved' | 'quota' | 'unavailable' | 'error';
 export type LoadNotice = null | 'invalid' | 'migrated' | 'unavailable';
 
 function readInitial(firstCaseName: string): { store: StoreData; notice: LoadNotice } {
   let text: string | null = null;
   try {
-    text = window.localStorage.getItem(STORE_KEY);
+    // 새 키가 비어 있으면 이전 버전 키에서 옮겨 온다 (원본은 지우지 않음)
+    text = window.localStorage.getItem(STORE_KEY) ?? window.localStorage.getItem(LEGACY_STORE_KEY);
   } catch {
     return { store: defaultStore(firstCaseName), notice: 'unavailable' };
   }
@@ -110,16 +133,25 @@ export function useToast(): ToastCtxValue {
   return v;
 }
 
-/* ---- 일시 상태 (저장하지 않음): 체크리스트 포커스, AI 입력 초안 ------------- */
+/* ---- 일시 상태 (저장하지 않음): 체크리스트 포커스, AI 어시스턴트 창·입력 초안 ------------- */
+/** float: 오른쪽 하단 플로팅 창 · panel: 오른쪽 전체 높이 사이드 패널 */
+export type ChatMode = 'float' | 'panel';
+
 interface TransientCtxValue {
   focusItemId: string | null;
   setFocusItemId: (id: string | null) => void;
   qaDraft: string;
   setQaDraft: (s: string) => void;
-  qaAttachment: string | null;
-  setQaAttachment: (id: string | null) => void;
-  qaPending: boolean;
-  setQaPending: (b: boolean) => void;
+  /** 다음 질문에 첨부할 화면 데이터 스냅샷 */
+  qaAttachment: ContextSnapshot | null;
+  setQaAttachment: (c: ContextSnapshot | null) => void;
+  /** 답변을 기다리는 대화 id (null = 대기 없음) — 전송 중 중복 입력 방지 */
+  qaPendingConv: string | null;
+  setQaPendingConv: (id: string | null) => void;
+  chatOpen: boolean;
+  setChatOpen: (b: boolean) => void;
+  chatMode: ChatMode;
+  setChatMode: (m: ChatMode) => void;
 }
 const TransientCtx = createContext<TransientCtxValue | null>(null);
 function useTransient(): TransientCtxValue {
@@ -145,6 +177,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       firstRender.current = false;
       return;
     }
+    setSaveStatus('pending');
     const t = window.setTimeout(() => setSaveStatus(writeStore(store)), 250);
     return () => window.clearTimeout(t);
   }, [store]);
@@ -178,16 +211,36 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // 일시 상태 — 케이스가 바뀌면 초기화
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [qaDraft, setQaDraft] = useState('');
-  const [qaAttachment, setQaAttachment] = useState<string | null>(null);
-  const [qaPending, setQaPending] = useState(false);
+  const [qaAttachment, setQaAttachment] = useState<ContextSnapshot | null>(null);
+  const [qaPendingConv, setQaPendingConv] = useState<string | null>(null);
+  // 창 열림·모드는 페이지를 이동해도 유지된다 (Provider 가 App 최상위에 있음). 모드는 다음 방문에도 기억한다.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMode, setChatModeState] = useState<ChatMode>(() => readStored<ChatMode>(CHAT_MODE_KEY, ['float', 'panel'], 'float'));
+  const setChatMode = useCallback((m: ChatMode) => {
+    setChatModeState(m);
+    writeStored(CHAT_MODE_KEY, m);
+  }, []);
   useEffect(() => {
     setQaDraft('');
     setQaAttachment(null);
     setFocusItemId(null);
   }, [store.currentCaseId]);
   const transientValue = useMemo(
-    () => ({ focusItemId, setFocusItemId, qaDraft, setQaDraft, qaAttachment, setQaAttachment, qaPending, setQaPending }),
-    [focusItemId, qaDraft, qaAttachment, qaPending],
+    () => ({
+      focusItemId,
+      setFocusItemId,
+      qaDraft,
+      setQaDraft,
+      qaAttachment,
+      setQaAttachment,
+      qaPendingConv,
+      setQaPendingConv,
+      chatOpen,
+      setChatOpen,
+      chatMode,
+      setChatMode,
+    }),
+    [focusItemId, qaDraft, qaAttachment, qaPendingConv, chatOpen, chatMode, setChatMode],
   );
 
   return (
@@ -241,11 +294,26 @@ export interface CalculatorState extends DerivedCalculator {
   hrsgClass: HrsgClass;
   raw: Record<NumericInputId, string>;
   edited: Partial<Record<NumericInputId, boolean>>;
+  units: Partial<Record<NumericInputId, string>>;
+  /** 마지막 계산 실행 이후 입력이 바뀜 — 결과를 가리고 '재평가 필요' 표시 */
+  stale: boolean;
   setMode: (m: EvaluationMode) => void;
   applyScenario: (id: ScenarioId) => void;
   setHrsgClass: (c: HrsgClass) => void;
   setRaw: (id: NumericInputId, value: string) => void;
+  /** 단위를 바꾸면 같은 물리량이 되도록 입력란 원문을 환산한다 */
+  setUnit: (id: NumericInputId, unitId: string) => void;
+  /** 계산 실행 (재평가) — stale 해제 */
+  commit: () => void;
   reset: () => void;
+}
+
+/** 시나리오 프리셋이 바꾸는 입력 — 직접 수정하면 '사용자 지정'으로 전환 */
+const PRESET_FIELDS = new Set<NumericInputId>(['currentBp', 'diffPressure', 'exhaustTemp']);
+
+/** 단위 환산 후 표시용 원문 — 유효 숫자 6자리 */
+function formatConverted(v: number): string {
+  return String(Number(v.toPrecision(6)));
 }
 
 export function useCalculator(): CalculatorState {
@@ -262,23 +330,42 @@ export function useCalculator(): CalculatorState {
           raw: { ...c.calc.raw, [id]: value },
           edited: { ...c.calc.edited, [id]: true },
           // 수동 입력은 시나리오를 '사용자 지정'으로 전환한다 (자동 판별 상태와는 별개 필드)
-          scenario: c.calc.mode === 'demo' && (id === 'currentBp' || id === 'diffPressure') ? 'custom' : c.calc.scenario,
+          scenario: c.calc.mode === 'demo' && PRESET_FIELDS.has(id) ? 'custom' : c.calc.scenario,
+          stale: c.calc.stale || c.calc.raw[id] !== value,
         },
       })),
     [updateCurrent],
   );
 
+  const setUnit = useCallback(
+    (id: NumericInputId, unitId: string) =>
+      updateCurrent((c) => {
+        const kind = INPUT_DEF[id].unitKind;
+        if (!kind) return c;
+        const from = unitDef(kind, c.calc.units[id]);
+        const to = unitDef(kind, unitId);
+        const r = parseNumericInput(c.calc.raw[id] ?? '');
+        const raw = r.ok ? formatConverted(to.fromBase(from.toBase(r.value))) : c.calc.raw[id];
+        return { ...c, calc: { ...c.calc, units: { ...c.calc.units, [id]: to.id }, raw: { ...c.calc.raw, [id]: raw } } };
+      }),
+    [updateCurrent],
+  );
+
+  const commit = useCallback(() => updateCurrent((c) => ({ ...c, calc: { ...c.calc, stale: false } })), [updateCurrent]);
+
   const applyScenario = useCallback(
     (id: ScenarioId) =>
       updateCurrent((c) => {
-        const vals = DEMO_SCENARIOS[id].values;
+        const vals = scenarioValues(id, c.calc.hrsgClass);
         const raw = { ...c.calc.raw };
         const edited = { ...c.calc.edited };
+        const units = { ...c.calc.units };
         for (const [k, v] of Object.entries(vals)) {
           raw[k as NumericInputId] = String(v);
           delete edited[k as NumericInputId];
+          delete units[k as NumericInputId]; // 프리셋 값은 기준 단위
         }
-        return { ...c, calc: { ...c.calc, scenario: id, raw, edited } };
+        return { ...c, calc: { ...c.calc, scenario: id, raw, edited, units, stale: true } };
       }),
     [updateCurrent],
   );
@@ -290,14 +377,25 @@ export function useCalculator(): CalculatorState {
         calc: {
           ...c.calc,
           hrsgClass: cls,
-          raw: { ...c.calc.raw, capacityMw: String(hrsgClassDef(cls).demoCapacityMw) },
-          edited: { ...c.calc.edited, capacityMw: false },
+          // 등급을 바꾸면 정격 용량·기준(설계) 배압·기준 스택 온도를 그 등급의 키트 값으로 맞춘다
+          raw: {
+            ...c.calc.raw,
+            capacityMw: String(hrsgClassDef(cls).demoCapacityMw),
+            referenceBp: String(kitDefaultValues(cls).referenceBp),
+            referenceStackTemp: String(kitDefaultValues(cls).referenceStackTemp),
+          },
+          edited: { ...c.calc.edited, capacityMw: false, referenceBp: false, referenceStackTemp: false },
+          units: { ...c.calc.units, referenceBp: undefined, referenceStackTemp: undefined },
+          stale: true,
         },
       })),
     [updateCurrent],
   );
 
-  const setMode = useCallback((m: EvaluationMode) => updateCurrent((c) => ({ ...c, calc: { ...c.calc, mode: m } })), [updateCurrent]);
+  const setMode = useCallback(
+    (m: EvaluationMode) => updateCurrent((c) => ({ ...c, calc: { ...c.calc, mode: m, stale: c.calc.stale || c.calc.mode !== m } })),
+    [updateCurrent],
+  );
   const reset = useCallback(() => updateCurrent((c) => ({ ...c, calc: { ...defaultCalc(), mode: c.calc.mode } })), [updateCurrent]);
 
   return {
@@ -308,10 +406,14 @@ export function useCalculator(): CalculatorState {
     hrsgClass: calc.hrsgClass,
     raw: calc.raw,
     edited: calc.edited,
+    units: calc.units,
+    stale: calc.stale,
     setMode,
     applyScenario,
     setHrsgClass,
     setRaw,
+    setUnit,
+    commit,
     reset,
   };
 }
@@ -354,17 +456,27 @@ export function useHistory(): HistoryState {
   };
 }
 
-/* ---- 데이터 요청 체크리스트 ----------------------------------------------------- */
+/* ---- 데이터 요청 체크리스트 (키트 progress 표준) ----------------------------------------- */
 export interface ChecklistState {
+  /** 키트 표준 진행 상태 그대로 — 키트 함수(kpis·emailDraft 등)에 넘길 때 사용 */
+  progress: KitProgress;
   reviewed: Record<string, boolean>;
+  /** 수급 상태 (키트 supply) */
   status: Record<string, ReceiptStatus>;
+  /** 검증 상태 (키트 verify) */
+  verify: Record<string, VerifyStatus>;
   notes: Record<string, string>;
   meta: Record<string, ChecklistMeta>;
   clientName: string;
   setReviewed: (id: string, v: boolean) => void;
-  /** 검토 체크박스만 일괄 변경 — 수령 상태는 바꾸지 않는다 */
+  /** 검토 체크박스만 일괄 변경 — 수급 상태는 바꾸지 않는다 */
   setReviewedMany: (ids: string[], v: boolean) => void;
-  setStatus: (id: string, s: ReceiptStatus) => void;
+  /**
+   * 수급 상태 변경. 실측값이 비어 있으면 '수령 완료'·'검증 필요'로 바꾸지 않고 false 를 돌려준다
+   * (가이드 §2.4 가드레일 — 화면은 토스트로 알리고 이전 상태를 유지한다).
+   */
+  setStatus: (id: string, s: ReceiptStatus) => boolean;
+  setVerify: (id: string, v: VerifyStatus) => void;
   setNote: (id: string, note: string) => void;
   setMeta: (id: string, patch: Partial<ChecklistMeta>) => void;
   setClientName: (s: string) => void;
@@ -375,41 +487,92 @@ export interface ChecklistState {
   requestFocus: (id: string | null) => void;
 }
 
+/** 키트 progress 항목 하나를 고친다 — 기본값과 같은 필드는 지워 키트 처음 상태({})와 같은 모양을 유지 */
+function patchEntry(progress: KitProgress, id: string, p: KitProgressEntry): KitProgress {
+  const next: KitProgressEntry = { ...progress[id], ...p };
+  if (next.supply === 'not_entered') delete next.supply;
+  if (next.verify === 'unverified') delete next.verify;
+  if (!next.reviewed) delete next.reviewed;
+  if (!next.value) delete next.value;
+  if (!next.note) delete next.note;
+  const out = { ...progress };
+  if (Object.keys(next).length) out[id] = next;
+  else delete out[id];
+  return out;
+}
+
 export function useChecklist(): ChecklistState {
   const { current, updateCurrent } = useStore();
   const { focusItemId, setFocusItemId } = useTransient();
   const cl = current.checklist;
+  const prog = cl.progress;
   const patch = useCallback(
     (fn: (c: CaseData['checklist']) => CaseData['checklist']) => updateCurrent((c) => ({ ...c, checklist: fn(c.checklist) })),
     [updateCurrent],
   );
-  const summary = useMemo(() => computeProgress(cl.reviewed, cl.status), [cl.reviewed, cl.status]);
-  const byCategory = useMemo(
-    () => ({
-      A: computeProgress(cl.reviewed, cl.status, 'A'),
-      B: computeProgress(cl.reviewed, cl.status, 'B'),
-      C: computeProgress(cl.reviewed, cl.status, 'C'),
-    }),
-    [cl.reviewed, cl.status],
+  const setEntry = useCallback(
+    (id: string, p: KitProgressEntry) => patch((x) => ({ ...x, progress: patchEntry(x.progress, id, p) })),
+    [patch],
   );
-  const readiness = useMemo(() => computeReadiness(cl.reviewed, cl.status), [cl.reviewed, cl.status]);
+  // 화면용 보기 — 키트 progress 에서 만든다 (없는 필드는 키트 기본값)
+  const views = useMemo(() => {
+    const ids = CHECKLIST_ITEMS.map((i) => i.id);
+    return {
+      reviewed: Object.fromEntries(ids.map((id) => [id, prog[id]?.reviewed === true])),
+      status: Object.fromEntries(ids.map((id) => [id, (prog[id]?.supply ?? 'not_entered') as ReceiptStatus])),
+      verify: Object.fromEntries(ids.map((id) => [id, (prog[id]?.verify ?? 'unverified') as VerifyStatus])),
+      notes: Object.fromEntries(ids.filter((id) => prog[id]?.note).map((id) => [id, prog[id].note as string])),
+      meta: Object.fromEntries(ids.map((id) => [id, { ...cl.ext[id], value: prog[id]?.value ?? '' }])),
+    };
+  }, [prog, cl.ext]);
+  const summary = useMemo(() => computeProgress(prog), [prog]);
+  const byCategory = useMemo(
+    () => Object.fromEntries(CHECKLIST_CATEGORIES.map((c) => [c, computeProgress(prog, c)])) as Record<ChecklistCategory, ProgressStats>,
+    [prog],
+  );
+  const readiness = useMemo(() => computeReadiness(prog), [prog]);
   return {
-    reviewed: cl.reviewed,
-    status: cl.status,
-    notes: cl.notes,
-    meta: cl.meta,
+    progress: prog,
+    ...views,
     clientName: cl.clientName,
-    setReviewed: (id, v) => patch((x) => ({ ...x, reviewed: { ...x.reviewed, [id]: v } })),
-    setReviewedMany: (ids, v) => patch((x) => ({ ...x, reviewed: { ...x.reviewed, ...Object.fromEntries(ids.map((id) => [id, v])) } })),
-    setStatus: (id, s) => patch((x) => ({ ...x, status: { ...x.status, [id]: s } })),
-    setNote: (id, note) => patch((x) => ({ ...x, notes: { ...x.notes, [id]: note } })),
-    setMeta: (id, p) => patch((x) => ({ ...x, meta: { ...x.meta, [id]: { ...x.meta[id], ...p } } })),
+    setReviewed: (id, v) => setEntry(id, { reviewed: v }),
+    setReviewedMany: (ids, v) => patch((x) => ({ ...x, progress: ids.reduce((acc, id) => patchEntry(acc, id, { reviewed: v }), x.progress) })),
+    setStatus: (id, s) => {
+      if (statusNeedsValue(s) && !(prog[id]?.value ?? '').trim()) return false;
+      setEntry(id, { supply: s });
+      return true;
+    },
+    setVerify: (id, v) => setEntry(id, { verify: v }),
+    setNote: (id, note) => setEntry(id, { note }),
+    setMeta: (id, p) =>
+      patch((x) => {
+        const { value, ...ext } = p;
+        return {
+          ...x,
+          progress: value === undefined ? x.progress : patchEntry(x.progress, id, { value }),
+          ext: Object.keys(ext).length ? { ...x.ext, [id]: { ...x.ext[id], ...ext } } : x.ext,
+        };
+      }),
     setClientName: (s) => patch((x) => ({ ...x, clientName: s })),
     summary,
     byCategory,
     readiness,
     focusItemId,
     requestFocus: setFocusItemId,
+  };
+}
+
+/* ---- 세정 전후 운전 조건 ------------------------------------------------------------ */
+export interface ConditionsState {
+  conditions: OperatingConditions;
+  setCondition: (key: keyof OperatingConditions, value: string) => void;
+}
+
+export function useConditions(): ConditionsState {
+  const { current, updateCurrent } = useStore();
+  return {
+    conditions: current.conditions,
+    setCondition: (key, value) => updateCurrent((c) => ({ ...c, conditions: { ...c.conditions, [key]: value } })),
   };
 }
 
@@ -437,112 +600,140 @@ export function useMeasurements(): MeasurementState {
   };
 }
 
-/* ---- AI 질의응답 (케이스별 대화 기록) ------------------------------------------------ */
+/* ---- AI 어시스턴트 (케이스별 대화 목록) ------------------------------------------------ */
 export interface QaState {
+  conversations: Conversation[];
+  activeId: string | null;
+  /** 현재 열린 대화의 메시지 (없으면 빈 배열 — 다음 질문에서 새 대화를 만든다) */
   messages: QaMessage[];
+  /** 현재 열린 대화가 답변을 기다리는 중 */
   pending: boolean;
+  /** 어느 대화든 답변을 기다리는 중 — 중복 전송 방지 */
+  busy: boolean;
   draft: string;
   setDraft: (s: string) => void;
-  /** 질문에 첨부된 계산 결과 스냅샷 id */
-  attachment: string | null;
-  setAttachment: (id: string | null) => void;
+  /** 다음 질문에 첨부할 화면 데이터 */
+  attachment: ContextSnapshot | null;
+  setAttachment: (c: ContextSnapshot | null) => void;
   /**
-   * 추천 질문 — 질문 문장을 그대로 참고문헌 RAG 서버에 질의한다 (직접 입력과 같은 경로).
-   * RAG 서버에 연결할 수 없으면 해당 추천 질문의 사전 작성 답변을 보여 준다.
+   * 질문 전송 — 질문·첨부 화면 데이터를 마스킹한 뒤 참고문헌 RAG 서버(/api/ask)에 보낸다.
+   * 서버에 연결할 수 없으면 오류 메시지를 남긴다 (사전 작성 답변으로 대신하지 않음).
    */
-  askPreset: (id: QaPresetId, questionText: string, lang: Lang) => void;
-  /**
-   * 직접 입력 — 첨부 스냅샷이 있으면 결과 해설, 아니면 참고문헌 RAG 서버에 질의.
-   * RAG 서버에 연결할 수 없으면 준비된 질문과 매칭, 그것도 없으면 범위 밖 안내.
-   */
-  askFree: (text: string, lang: Lang) => void;
-  clear: () => void;
+  ask: (text: string, lang: Lang) => void;
+  /** 서버 오류 메시지의 질문을 다시 보낸다 */
+  retry: (errorMsgId: number, lang: Lang) => void;
+  newConversation: () => void;
+  selectConversation: (id: string) => void;
+  deleteConversation: (id: string) => void;
+  chatOpen: boolean;
+  setChatOpen: (b: boolean) => void;
+  chatMode: ChatMode;
+  setChatMode: (m: ChatMode) => void;
+  /** 어시스턴트 열기 — 화면 데이터 첨부·추천 질문 초안을 함께 넣을 수 있다 */
+  openAssistant: (opts?: { context?: ContextSnapshot; draft?: string }) => void;
 }
 
-const ANSWER_DELAY_MS = 350;
+/** 첨부 화면 데이터의 문자열 값도 전송 전에 마스킹한다 (서버에서 한 번 더 마스킹) */
+function maskContext(ctx: ContextSnapshot | undefined, names: string[]): ContextSnapshot | undefined {
+  if (!ctx) return undefined;
+  return {
+    ...ctx,
+    title: maskSensitive(ctx.title, names),
+    items: ctx.items.map((i) => ({ ...i, label: maskSensitive(i.label, names), value: typeof i.value === 'string' ? maskSensitive(i.value, names) : i.value })),
+  };
+}
 
 export function useQa(): QaState {
   const { current, updateCase } = useStore();
   const t = useTransient();
   const caseId = current.id;
+  const qa = current.qa;
+  const active = qa.conversations.find((c) => c.id === qa.activeId) ?? null;
+  const clientName = current.checklist.clientName;
+  const sensitiveNames = useMemo(() => (clientName.trim() ? [clientName.trim()] : []), [clientName]);
 
-  const pushTo = useCallback(
-    (build: (nextId: number, at: string) => QaMessage[]) =>
-      updateCase(caseId, (c) => {
-        const next = Math.max(0, ...c.qa.messages.map((m) => m.id)) + 1;
-        return { ...c, qa: { messages: [...c.qa.messages, ...build(next, new Date().toISOString())] } };
-      }),
-    [caseId, updateCase],
-  );
-
-  /** 준비된 답변을 찾는 동안 짧게 '검색 중' 상태를 보여준다 (실제 생성이 아님) */
-  const answerLater = useCallback(
-    (build: (nextId: number, at: string) => QaMessage[]) => {
-      t.setQaPending(true);
-      window.setTimeout(() => {
-        pushTo(build);
-        t.setQaPending(false);
-      }, ANSWER_DELAY_MS);
+  /** 질문한 대화에 답변을 넣는다 — 그 사이 다른 대화로 바꾸거나 페이지를 이동해도 섞이지 않는다 */
+  const send = useCallback(
+    (convId: string, text: string, lang: Lang, context?: ContextSnapshot) => {
+      t.setQaPendingConv(convId);
+      askRag(text, lang, context)
+        .then((r) => updateCase(caseId, (c) => ({ ...c, qa: appendToConversation(c.qa, convId, (n, at) => [{ id: n, at, kind: 'rag', context, ...r }]) })))
+        .catch(() =>
+          updateCase(caseId, (c) => ({
+            ...c,
+            qa: appendToConversation(c.qa, convId, (n, at) => [{ id: n, at, kind: 'error', reason: 'server', question: text, context }]),
+          })),
+        )
+        .finally(() => t.setQaPendingConv(null));
     },
-    [pushTo, t],
+    [caseId, updateCase, t],
   );
 
-  /** 참고문헌 RAG 서버에 질의하고, 서버에 연결할 수 없으면 fallback 메시지를 넣는다 */
-  const answerWithRag = useCallback(
-    (text: string, lang: Lang, fallback: (nextId: number, at: string) => QaMessage) => {
-      t.setQaPending(true);
-      askRag(text, lang)
-        .then((r) => pushTo((n, at) => [{ id: n, at, kind: 'rag', ...r }]))
-        .catch(() => pushTo((n, at) => [fallback(n, at)]))
-        .finally(() => t.setQaPending(false));
-    },
-    [pushTo, t],
-  );
-
-  const askPreset = useCallback(
-    (id: QaPresetId, text: string, lang: Lang) => {
-      if (t.qaPending) return;
-      pushTo((n, at) => [{ id: n, at, kind: 'question', text }]);
-      t.setQaDraft('');
-      answerWithRag(text, lang, (n, at) => ({ id: n, at, kind: 'answer', answerId: id, via: 'preset' }));
-    },
-    [pushTo, answerWithRag, t],
-  );
-
-  const askFree = useCallback(
-    (text: string, lang: Lang) => {
-      if (t.qaPending) return;
-      const snapshotId = t.qaAttachment ?? undefined;
-      pushTo((n, at) => [{ id: n, at, kind: 'question', text, snapshotId }]);
+  const ask = useCallback(
+    (raw: string, lang: Lang) => {
+      if (t.qaPendingConv) return;
+      // 전화번호·이메일·발전소 고유 명칭은 기록·전송 전에 마스킹한다 (가이드 §3.2)
+      const text = maskSensitive(raw.trim(), sensitiveNames);
+      if (!text) return;
+      const context = maskContext(t.qaAttachment ?? undefined, sensitiveNames);
+      // 새 대화 id 를 미리 정해 두고, 같은 id 로 질문과 답변을 넣는다
+      const convId = current.qa.activeId ?? newId('conv');
+      updateCase(caseId, (c) => ({ ...c, qa: appendToActive(c.qa, (n, at) => [{ id: n, at, kind: 'question', text, context }], new Date(), convId) }));
       t.setQaAttachment(null);
       t.setQaDraft('');
-      if (snapshotId) {
-        const exists = current.history.some((h) => h.id === snapshotId);
-        answerLater((n, at) => [
-          exists
-            ? { id: n, at, kind: 'answer', answerId: 'resultSummary', via: 'snapshot', snapshotId }
-            : { id: n, at, kind: 'error', reason: 'snapshot-missing' },
-        ]);
-        return;
-      }
-      // RAG 서버 미기동·네트워크 오류 → 기존 시연용 답변 매칭
-      answerWithRag(text, lang, (n, at) => {
-        const m = matchQuestion(text, QA_PRESETS);
-        return m ? { id: n, at, kind: 'answer', answerId: m.id, via: m.via } : { id: n, at, kind: 'fallback' };
-      });
+      send(convId, text, lang, context);
     },
-    [pushTo, answerLater, answerWithRag, t, current.history],
+    [t, sensitiveNames, current.qa.activeId, caseId, updateCase, send],
+  );
+
+  const retry = useCallback(
+    (errorMsgId: number, lang: Lang) => {
+      if (t.qaPendingConv || !active) return;
+      const err = active.messages.find((m) => m.id === errorMsgId);
+      if (!err || err.kind !== 'error' || !err.question) return;
+      // 실패한 오류 메시지는 지우고 같은 질문을 다시 보낸다
+      const convId = active.id;
+      updateCase(caseId, (c) => ({
+        ...c,
+        qa: {
+          ...c.qa,
+          conversations: c.qa.conversations.map((cv) => (cv.id === convId ? { ...cv, messages: cv.messages.filter((m) => m.id !== errorMsgId) } : cv)),
+        },
+      }));
+      send(convId, err.question, lang, err.context);
+    },
+    [t.qaPendingConv, active, caseId, updateCase, send],
+  );
+
+  const { setChatOpen, setQaAttachment, setQaDraft } = t;
+  const openAssistant = useCallback(
+    (opts: { context?: ContextSnapshot; draft?: string } = {}) => {
+      if (opts.context) setQaAttachment(opts.context);
+      if (opts.draft !== undefined) setQaDraft(opts.draft);
+      setChatOpen(true);
+    },
+    [setChatOpen, setQaAttachment, setQaDraft],
   );
 
   return {
-    messages: current.qa.messages,
-    pending: t.qaPending,
+    conversations: qa.conversations,
+    activeId: qa.activeId,
+    messages: active?.messages ?? [],
+    pending: t.qaPendingConv !== null && t.qaPendingConv === qa.activeId,
+    busy: t.qaPendingConv !== null,
     draft: t.qaDraft,
     setDraft: t.setQaDraft,
     attachment: t.qaAttachment,
     setAttachment: t.setQaAttachment,
-    askPreset,
-    askFree,
-    clear: () => updateCase(caseId, (c) => ({ ...c, qa: { messages: [] } })),
+    ask,
+    retry,
+    newConversation: () => updateCase(caseId, (c) => ({ ...c, qa: { ...c.qa, activeId: null } })),
+    selectConversation: (id) => updateCase(caseId, (c) => ({ ...c, qa: { ...c.qa, activeId: id } })),
+    deleteConversation: (id) => updateCase(caseId, (c) => ({ ...c, qa: deleteConversationIn(c.qa, id) })),
+    chatOpen: t.chatOpen,
+    setChatOpen: t.setChatOpen,
+    chatMode: t.chatMode,
+    setChatMode: t.setChatMode,
+    openAssistant,
   };
 }

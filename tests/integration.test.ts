@@ -1,14 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  calcAdditionalRevenueKrw,
-  calcEffectiveHours,
-  calcNetBenefitKrw,
-  calcPaybackMonths,
-  computeCleaningEconomics,
-} from '@/lib/calc';
 import { deriveCalculator } from '@/lib/calculatorModel';
 import {
+  STORE_KEY,
   addCase,
   defaultCalc,
   defaultStore,
@@ -20,7 +14,9 @@ import {
   updateCaseIn,
   type CalcCaseState,
 } from '@/lib/caseStore';
-import { computeProgress, computeReadiness } from '@/lib/checklistStats';
+import { computeProgress, computeReadiness, statusNeedsValue } from '@/lib/checklistStats';
+import { validateProgress } from '@/lib/checklist_adapter';
+import { kitLossAtBp } from '@/lib/calc_adapter';
 import { activeAlarms } from '@/lib/alarms';
 import { buildAnswer, type AnswerContext } from '@/components/qa/answers';
 import type { CalculatorState, ChecklistState, MeasurementState, AnalysisSnapshot } from '@/context/Workspace';
@@ -28,88 +24,36 @@ import { QA_FALLBACK_TEXT, QA_PRESETS } from '@/data/qaPresets';
 import { CHECKLIST_ITEMS, REQUIRED_ITEM_IDS } from '@/data/checklistItems';
 import { HRSG_CLASSES } from '@/data/calculatorInputs';
 import { buildRequestEmail } from '@/lib/emailDraft';
-import type { ReceiptStatus } from '@/types';
+import type { KitProgress } from '@/lib/kit';
+import { MASK, findUnsupportedNumbers, maskSensitive } from '@/lib/privacy';
+import { assessConditionDeviation } from '@/lib/conditions';
+import { buildActualPerformanceGap, buildCalcSummaryKpi, buildMethodPaybacks, buildStepProgress } from '@/lib/dashboardModel';
 
 const calcWith = (patch: Partial<Record<string, string>>, mode: 'demo' | 'user' = 'demo'): CalcCaseState => {
   const c = defaultCalc();
   return { ...c, mode, raw: { ...c.raw, ...patch } as CalcCaseState['raw'] };
 };
+const won = (v: number | null) => `${new Intl.NumberFormat('ko-KR').format(v ?? 0)} 원`;
 
-/* ---- 경제성 표준식 ------------------------------------------------------------ */
-test('경제성 기본값: 추가 매출·순편익·회수·손익분기 (MW→kW 1000 포함)', () => {
-  const r = computeCleaningEconomics({
-    recoveredPowerMw: 1.1,
-    operatingHours: 720,
-    shutdownDays: 0,
-    smp: 140,
-    cleaningCostKrw: 30_000_000,
-    additionalCostKrw: 0,
-    outputMw: 135,
-  });
-  assert.equal(r.additionalRevenueKrw, 110_880_000); // 1.1 × 1000 × 720 × 140
-  assert.equal(r.shutdownLossKrw, 0);
-  assert.equal(r.initialInvestmentKrw, 30_000_000);
-  assert.equal(r.netBenefitKrw, 80_880_000);
-  assert.equal(r.monthlyIncrementalBenefitKrw, 110_880_000);
-  assert.equal(Math.round(r.paybackMonths! * 1000) / 1000, 0.271);
-  assert.equal(Math.round(r.breakEvenDays! * 100) / 100, 8.12); // 30,000,000 ÷ (110,880,000 ÷ 30)
-  assert.equal(calcAdditionalRevenueKrw(1, 1, 1), 1000);
-});
-
-test('정지일수: 유효 가동시간에서 제외 + 정지 손실 1회 차감 (이중 반영 없음)', () => {
-  const r = computeCleaningEconomics({
-    recoveredPowerMw: 1.1,
-    operatingHours: 720,
-    shutdownDays: 2,
-    smp: 140,
-    cleaningCostKrw: 30_000_000,
-    additionalCostKrw: 5_000_000,
-    outputMw: 135,
-  });
-  assert.equal(r.effectiveHours, 672);
-  assert.equal(r.additionalRevenueKrw, Math.round(1.1 * 1000 * 672 * 140));
-  assert.equal(r.shutdownLossKrw, 135 * 1000 * 48 * 140);
-  assert.equal(r.initialInvestmentKrw, 30_000_000 + 907_200_000 + 5_000_000);
-  // 순편익 = 매출 − 세정비 − 정지손실 − 추가비용 (각 1회)
-  assert.equal(r.netBenefitKrw, r.additionalRevenueKrw! - 30_000_000 - 907_200_000 - 5_000_000);
-  // 회수 기간 분모(정상 월 편익)에는 일회성 비용을 다시 빼지 않는다
-  assert.equal(r.paybackMonths, Math.round((r.initialInvestmentKrw! / r.monthlyIncrementalBenefitKrw!) * 1e6) / 1e6);
-});
-
-test('회수 불가·산출 불가 경계', () => {
-  assert.equal(calcPaybackMonths(30_000_000, 0), null);
-  assert.equal(calcPaybackMonths(30_000_000, -1), null);
-  assert.equal(calcEffectiveHours(720, 31), null); // 정지시간 744h > 720h
-  assert.equal(calcNetBenefitKrw(null, 1, 0, 0), null);
-});
-
-/* ---- 계산기 파생 모델: 모드 게이팅 · 무효화 ----------------------------------- */
-test('DEMO 기본값은 105,840,000원, 사용자 입력 모드는 배압 손실 모델을 보류', () => {
+/* ---- 계산기 파생 모델 (키트 경유) --------------------------------------------------- */
+test('DEMO · 사용자 입력 모드 모두 키트 계산식 — 같은 입력이면 같은 결과', () => {
   const demo = deriveCalculator(defaultCalc());
-  assert.equal(demo.metrics.monthlyLossKrw.value, 105_840_000);
-  assert.equal(demo.metrics.monthlyLossKrw.status, 'ok');
-  assert.equal(demo.model, 'DEMO-GT-150');
   const user = deriveCalculator({ ...defaultCalc(), mode: 'user' });
-  assert.equal(user.metrics.powerLossMw.status, 'model');
-  assert.equal(user.metrics.monthlyLossKrw.value, null);
-  assert.equal(user.metrics.deltaBp.value, 70); // 산술값은 계산
-  assert.equal(user.metrics.netBenefitKrw.status, 'ok');
+  assert.equal(demo.metrics.monthlyLossKrw.status, 'ok');
+  assert.equal(user.metrics.powerLossMw.value, demo.metrics.powerLossMw.value);
+  assert.equal(demo.model, 'F-Class GT (Mock)');
 });
 
-test('잘못된 입력은 의존 결과만 무효화 — 이전 값을 남기지 않는다', () => {
-  const bad = deriveCalculator(calcWith({ currentBp: 'abc' }));
-  assert.equal(bad.valid, false);
-  assert.deepEqual(bad.errorIds, ['currentBp']);
-  assert.equal(bad.metrics.deltaBp.status, 'invalid');
-  assert.equal(bad.metrics.monthlyLossKrw.value, null);
-  assert.equal(bad.metrics.netBenefitKrw.status, 'ok'); // 배압과 무관한 경제성은 유지
+test('잘못된 입력 — 핵심 입력은 키트 결과 전체, 공법 입력은 그 공법만 「산출 불가」', () => {
   const empty = deriveCalculator(calcWith({ smp: '' }));
   assert.equal(empty.errors.smp, 'empty');
-  assert.equal(empty.metrics.additionalRevenueKrw.status, 'invalid');
+  assert.equal(empty.metrics.monthlyIncrementalBenefitKrw.status, 'invalid');
   const neg = deriveCalculator(calcWith({ cleaningCostKrw: '-5' }));
-  assert.equal(neg.errors.cleaningCostKrw, 'min');
-  const comma = deriveCalculator(calcWith({ cleaningCostKrw: '30,000,000' }));
-  assert.equal(comma.values.cleaningCostKrw, 30_000_000);
+  assert.equal(neg.errors.cleaningCostKrw, 'negative');
+  assert.equal(neg.metrics.powerLossMw.status, 'ok');
+  assert.equal(neg.kit.methods.find((m) => m.id === 'dryice')!.available, false);
+  const comma = deriveCalculator(calcWith({ cleaningCostKrw: '300,000,000' }));
+  assert.equal(comma.values.cleaningCostKrw, 300_000_000);
   // 선택 입력(설계 핀치값)은 비워도 오류가 아니다
   assert.equal(deriveCalculator(defaultCalc()).errors.designPinch, null);
 });
@@ -119,14 +63,18 @@ test('입력이 바뀌면 inputsKey도 바뀐다 (스냅샷 최신 여부 판별
   assert.equal(deriveCalculator(defaultCalc()).inputsKey, deriveCalculator(defaultCalc()).inputsKey);
 });
 
-test('설비 유형 ↔ 가상 모델 매핑', () => {
+test('GT 등급 ↔ 키트 등급 매핑 (F/H/E)', () => {
   assert.deepEqual(
     HRSG_CLASSES.map((h) => [h.label, h.demoCapacityMw, h.demoModel]),
     [
-      ['F-class', 150, 'DEMO-GT-150'],
-      ['J-class', 270, 'DEMO-GT-270'],
+      ['F-Class', 270, 'F-Class GT (Mock)'],
+      ['H-Class', 400, 'H-Class GT (Mock)'],
+      ['E-Class', 170, 'E-Class GT (Mock)'],
     ],
   );
+  const h = deriveCalculator({ ...calcWith({ capacityMw: '400' }), hrsgClass: 'H' });
+  assert.equal(h.kit.run.inp.equipment.gt_class, 'H');
+  assert.equal(h.kit.run.errors.length, 0);
 });
 
 /* ---- 케이스 저장 구조 ---------------------------------------------------------- */
@@ -137,13 +85,13 @@ test('케이스 복제는 깊은 복사 — 한쪽 변경이 다른 쪽에 영�
   const b = s.currentCaseId;
   assert.notEqual(a, b);
   s = updateCaseIn(s, b, (c) => ({ ...c, calc: { ...c.calc, raw: { ...c.calc.raw, currentBp: '999' } } }));
-  s = updateCaseIn(s, b, (c) => ({ ...c, checklist: { ...c.checklist, reviewed: { ...c.checklist.reviewed, 'a-gt-load': true } } }));
+  s = updateCaseIn(s, b, (c) => ({ ...c, checklist: { ...c.checklist, progress: { ...c.checklist.progress, 'A-01': { reviewed: true } } } }));
   const A = s.cases.find((c) => c.id === a)!;
   const B = s.cases.find((c) => c.id === b)!;
-  assert.equal(A.calc.raw.currentBp, '320');
+  assert.equal(A.calc.raw.currentBp, '305.9');
   assert.equal(B.calc.raw.currentBp, '999');
-  assert.equal(A.checklist.reviewed['a-gt-load'], false);
-  assert.equal(B.checklist.reviewed['a-gt-load'], true);
+  assert.equal(A.checklist.progress['A-01'], undefined);
+  assert.equal(B.checklist.progress['A-01']?.reviewed, true);
 });
 
 test('케이스 추가·이름 변경·삭제 규칙 (마지막 케이스는 삭제 불가)', () => {
@@ -164,57 +112,117 @@ test('localStorage 직렬화 왕복 · 손상 데이터 · 미래 버전 · 구�
   const back = parseStore(serializeStore(s));
   assert.equal(back.kind, 'ok');
   if (back.kind === 'ok') {
-    assert.equal(back.store.cases[0].calc.raw.currentBp, '320');
+    assert.equal(back.store.cases[0].calc.raw.currentBp, '305.9');
     assert.equal(back.migrated, false);
+    assert.deepEqual(back.store.cases[0].checklist.progress, {});
   }
   assert.deepEqual(parseStore(null), { kind: 'empty' });
   assert.deepEqual(parseStore('{bad'), { kind: 'invalid', reason: 'json' });
   assert.deepEqual(parseStore(JSON.stringify({ version: 99, cases: [] })), { kind: 'invalid', reason: 'newer-version' });
-  const legacy = parseStore(JSON.stringify({ cases: [{ id: 'x', name: 'old', checklist: { status: { 'a-gt-load': 'bogus' } } }] }));
-  assert.equal(legacy.kind, 'ok');
-  if (legacy.kind === 'ok') {
-    assert.equal(legacy.migrated, true);
-    const c = legacy.store.cases[0];
-    assert.equal(Object.keys(c.checklist.status).length, 22);
-    assert.equal(c.checklist.status['a-gt-load'], 'noMeasured'); // 알 수 없는 값은 버림
-    assert.equal(c.calc.raw.smp, '140'); // 누락 입력은 기본값
+  // 버전 2 데이터: 사용자가 직접 바꾼 입력만 옮기고 나머지는 새(키트) 기본값. 예전 J 등급은 기본 등급으로
+  const v2 = parseStore(
+    JSON.stringify({
+      version: 2,
+      currentCaseId: 'y',
+      cases: [{ id: 'y', name: 'v2', calc: { hrsgClass: 'J', raw: { currentBp: '320', smp: '150' }, edited: { smp: true } } }],
+    }),
+  );
+  assert.equal(v2.kind, 'ok');
+  if (v2.kind === 'ok') {
+    const c = v2.store.cases[0];
+    assert.equal(c.calc.raw.currentBp, '305.9');
+    assert.equal(c.calc.raw.smp, '150');
+    assert.equal(c.calc.hrsgClass, 'F');
+    assert.equal(c.calc.stale, false);
+    assert.deepEqual(c.conditions, { beforeLoadPct: '', afterLoadPct: '', beforeAmbientC: '', afterAmbientC: '' });
   }
 });
 
-/* ---- 체크리스트 통계 ------------------------------------------------------------- */
-test('수령률과 검토율은 독립 · 검증 필요는 수령으로 집계 · 필수 충족은 수령 완료만', () => {
-  const status = Object.fromEntries(CHECKLIST_ITEMS.map((i) => [i.id, 'noMeasured' as ReceiptStatus]));
-  const reviewed = Object.fromEntries(CHECKLIST_ITEMS.map((i) => [i.id, false]));
-  status['a-gt-load'] = 'received';
-  status['a-exh-flow'] = 'needsVerification';
-  reviewed['c-maint'] = true;
-  const p = computeProgress(reviewed, status);
-  assert.equal(p.receivedCount, 2);
-  assert.equal(p.reviewedCount, 1);
-  assert.equal(computeProgress(reviewed, status, 'A').receivedCount, 2);
-  assert.equal(computeProgress(reviewed, status, 'C').reviewedCount, 1);
-  const all = Object.fromEntries(REQUIRED_ITEM_IDS.map((id) => [id, 'received' as ReceiptStatus]));
-  const r1 = computeReadiness(reviewed, { ...status, ...all });
-  assert.equal(r1.requiredMet, true);
-  assert.equal(r1.evaluable, false); // 검토 전
-  const r2 = computeReadiness({ ...reviewed, ...Object.fromEntries(REQUIRED_ITEM_IDS.map((id) => [id, true])) }, { ...status, ...all });
-  assert.equal(r2.evaluable, true);
-  assert.equal(computeReadiness(reviewed, { ...status, ...all, 'b-bp-dp': 'needsVerification' }).requiredMet, false);
+test('체크리스트 이전: 버전 4 이하 status·reviewed·notes·meta → 키트 progress (알 수 없는 값은 버림)', () => {
+  const v4 = parseStore(
+    JSON.stringify({
+      version: 4,
+      currentCaseId: 'x',
+      cases: [
+        {
+          id: 'x',
+          name: 'old',
+          checklist: {
+            status: { 'A-01': 'received', 'A-02': 'needsVerification', 'A-03': 'bogus', 'Z-99': 'received' },
+            reviewed: { 'A-01': true },
+            notes: { 'A-02': '메모' },
+            meta: { 'A-01': { value: '270', unit: 'MW', location: 'GT', condition: '', measuredAt: '' } },
+            clientName: '시연',
+          },
+        },
+      ],
+    }),
+  );
+  assert.equal(v4.kind, 'ok');
+  if (v4.kind === 'ok') {
+    const cl = v4.store.cases[0].checklist;
+    assert.deepEqual(cl.progress, {
+      'A-01': { supply: 'received', reviewed: true, value: '270' },
+      'A-02': { supply: 'verify_needed', note: '메모' },
+    });
+    assert.equal(cl.ext['A-01'].location, 'GT');
+    assert.equal(cl.clientName, '시연');
+    assert.ok(validateProgress(cl.progress).ok);
+  }
 });
 
-test('DEMO 경보 규칙 — 정의된 규칙만 집계', () => {
-  assert.equal(activeAlarms({ currentBp: 320, scenario: 'alarm' }).length, 1);
-  assert.equal(activeAlarms({ currentBp: 255, scenario: 'normal' }).length, 0);
-  assert.equal(activeAlarms({ currentBp: 360, scenario: 'trip' }).length, 2);
-  assert.equal(activeAlarms({ currentBp: null, scenario: 'custom' }).length, 0);
+test('저장 키는 가이드 §1.3 의 hrsg_explorer_v1_cases', () => {
+  assert.equal(STORE_KEY, 'hrsg_explorer_v1_cases');
 });
 
-/* ---- AI 답변 인용 규칙 ------------------------------------------------------------ */
+/* ---- 체크리스트 통계 (키트 kpis) ------------------------------------------------------ */
+test('[키트 기대값] 체크리스트 처음 상태 · A-01 수령 완료 · 해당 없음 분모 제외 · 필수 충족', () => {
+  const empty: KitProgress = {};
+  const p0 = computeProgress(empty);
+  assert.deepEqual([p0.receivedPct, p0.receivedCount, p0.total], [0, 0, 49]);
+  assert.equal(p0.byStatus.not_entered, 49);
+  assert.equal(REQUIRED_ITEM_IDS.length, 16);
+  assert.equal(computeReadiness(empty).missingIds.length, 16);
+
+  const one: KitProgress = { 'A-01': { supply: 'received', value: '270' } };
+  const p1 = computeProgress(one);
+  assert.deepEqual([p1.receivedPct, p1.receivedCount, p1.total], [2, 1, 49]); // 「수령률 2% (1/49)」
+
+  const na: KitProgress = { 'E-02': { supply: 'na' } };
+  assert.equal(computeProgress(na).total, 48);
+
+  const allReq: KitProgress = Object.fromEntries(REQUIRED_ITEM_IDS.map((id) => [id, { supply: 'verify_needed', value: 'x' }]));
+  const r1 = computeReadiness(allReq);
+  assert.equal(r1.requiredMet, true); // 검증 필요도 수령으로 본다 (키트 isSatisfied)
+  assert.equal(r1.evaluable, false); // 검토 전 (앱 기준)
+  const reviewedAll = Object.fromEntries(REQUIRED_ITEM_IDS.map((id) => [id, { supply: 'received' as const, value: 'x', reviewed: true }]));
+  assert.equal(computeReadiness(reviewedAll).evaluable, true);
+  // 검증 실패는 필수 충족이 아니다
+  assert.equal(computeReadiness({ ...allReq, 'A-01': { supply: 'received', value: 'x', verify: 'failed' } }).requiredMet, false);
+  assert.equal(computeProgress(allReq, 'A').receivedCount, 5);
+});
+
+test('[키트] 화면 글자를 그대로 저장한 상태는 validateProgress 오류', () => {
+  const bad = validateProgress({ 'A-01': { supply: '수령 완료' as never } });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.errors[0].includes('"received"'));
+});
+
+test('DEMO 경보 규칙 — 키트 GT 배압 구간 기준', () => {
+  const bands = deriveCalculator(defaultCalc()).bands!;
+  assert.equal(activeAlarms({ currentBp: bands.caution, scenario: 'alarm', bands }).length, 1);
+  assert.equal(activeAlarms({ currentBp: 300, scenario: 'normal', bands }).length, 0);
+  assert.equal(activeAlarms({ currentBp: bands.danger, scenario: 'trip', bands }).length, 2);
+  assert.equal(activeAlarms({ currentBp: null, scenario: 'custom', bands: null }).length, 0);
+});
+
+/* ---- AI 답변 인용 규칙 (이전 버전 답변 표시) ------------------------------------------- */
 function ctxFrom(calc: CalcCaseState, lang: 'ko' | 'en' = 'ko', snapshot?: AnalysisSnapshot): AnswerContext {
   const d = deriveCalculator(calc);
-  const status = Object.fromEntries(CHECKLIST_ITEMS.map((i) => [i.id, 'noMeasured' as ReceiptStatus]));
+  const progress: KitProgress = {};
+  const status = Object.fromEntries(CHECKLIST_ITEMS.map((i) => [i.id, 'not_entered']));
   const reviewed = Object.fromEntries(CHECKLIST_ITEMS.map((i) => [i.id, false]));
-  const checklist = { status, reviewed, summary: computeProgress(reviewed, status), readiness: computeReadiness(reviewed, status) } as unknown as ChecklistState;
+  const checklist = { progress, status, reviewed, summary: computeProgress(progress), readiness: computeReadiness(progress) } as unknown as ChecklistState;
   const state = { ...d, mode: calc.mode, scenario: calc.scenario, hrsgClass: calc.hrsgClass, raw: calc.raw, edited: calc.edited } as unknown as CalculatorState;
   return { lang, calc: state, checklist, measurements: { entries: [] } as unknown as MeasurementState, snapshot };
 }
@@ -231,15 +239,14 @@ test('모든 추천 답변: 구조 6요소 · 검증된 출처 미등록 · 체�
   }
 });
 
-test('AI 수치 인용: 유효 결과만 · 무효 입력이면 숫자 없음 · 사용자 모드는 모델 미연동', () => {
+test('AI 수치 인용: 유효 결과만 · 무효 입력이면 숫자 없음', () => {
+  const expected = won(deriveCalculator(defaultCalc()).metrics.monthlyLossKrw.value);
   const ok = buildAnswer('bpImpact', ctxFrom(defaultCalc()));
-  assert.ok(ok.facts.some((f) => f.value === '105,840,000 원'));
+  assert.ok(ok.facts.some((f) => f.value === expected), expected);
   const bad = buildAnswer('bpImpact', ctxFrom(calcWith({ currentBp: 'x' })));
   const monthly = bad.facts.find((f) => f.label.includes('월간'))!;
   assert.equal(monthly.value, '—');
   assert.equal(monthly.status, '산출 불가');
-  const user = buildAnswer('bpImpact', ctxFrom({ ...defaultCalc(), mode: 'user' }));
-  assert.equal(user.facts.find((f) => f.label.includes('월간'))!.status, '모델 미연동 · 평가 보류');
 });
 
 test('결과 스냅샷 해설: 입력이 바뀐 뒤에는 스냅샷 수치를 인용하지 않는다', () => {
@@ -247,21 +254,97 @@ test('결과 스냅샷 해설: 입력이 바뀐 뒤에는 스냅샷 수치를 �
   const snap: AnalysisSnapshot = {
     id: 's1', seq: 1, createdAt: new Date('2026-10-20T00:00:00Z').toISOString(), mode: 'demo', scenario: 'alarm', hrsgClass: 'F',
     model: d.model, inputsKey: d.inputsKey, inputs: d.values,
-    bp: { deltaBp: 70, powerLossMw: 1.05, monthlyLossKrw: 105_840_000, level: 'danger' }, cleaning: d.cleaning,
+    bp: { deltaBp: d.metrics.deltaBp.value, powerLossMw: d.metrics.powerLossMw.value, monthlyLossKrw: d.metrics.monthlyLossKrw.value, level: d.level },
+    cleaning: d.cleaning,
   };
   const fresh = buildAnswer('resultSummary', ctxFrom(defaultCalc(), 'ko', snap));
-  assert.ok(fresh.facts.some((f) => f.value === '105,840,000 원'));
+  assert.ok(fresh.facts.some((f) => f.value === won(d.metrics.monthlyLossKrw.value)));
   assert.equal(fresh.factsNotice, undefined);
   const stale = buildAnswer('resultSummary', ctxFrom(calcWith({ currentBp: '300' }), 'ko', snap));
   assert.equal(stale.facts.length, 0);
   assert.ok(stale.factsNotice?.includes('인용하지 않습니다'));
 });
 
-test('미등록 질문 안내 문구 · 이메일 초안 고객사·단위·조건', () => {
+test('미등록 질문 안내 문구 · 이메일 초안 고객사·단위·조건 · D/E 카테고리 포함', () => {
   assert.equal(QA_FALLBACK_TEXT.ko, '확인 가능한 공학 데이터 범위를 벗어났습니다. 추천 질문을 이용하시거나 계산기 화면을 확인해 주세요.');
-  const items = CHECKLIST_ITEMS.filter((i) => i.id === 'b-bp-dp');
-  const e = buildRequestEmail(items, 'ko', { clientName: '시연발전소', meta: { 'b-bp-dp': { unit: 'mmH₂O', condition: '정격 부하 1시간 평균' } } });
+  const items = CHECKLIST_ITEMS.filter((i) => ['A-02', 'D-01', 'E-01'].includes(i.id));
+  const e = buildRequestEmail(items, 'ko', { clientName: '시연발전소', meta: { 'A-02': { unit: 'mmH₂O', condition: '정격 부하 1시간 평균' } } });
   assert.ok(e.subject.includes('시연발전소'));
-  assert.ok(e.body.includes('필요 단위: mmH₂O') && e.body.includes('측정 조건: 정격 부하 1시간 평균'));
+  const row = e.body.split('\n').find((l) => l.includes('| A-02 |'))!;
+  assert.ok(row.includes('mmH₂O') && row.includes('정격 부하 1시간 평균'));
+  assert.ok(e.body.includes('| D-01 |') && e.body.includes('| E-01 |'));
   assert.ok(buildRequestEmail(items, 'ko').subject.includes('[고객사/발전소명]'));
+});
+
+/* ---- 검수 항목 ------------------------------------------------------------------------ */
+test('[체크리스트] 실측값 없이 수령 완료·검증 필요로 바꿀 수 없다 (가드레일)', () => {
+  assert.equal(statusNeedsValue('received'), true);
+  assert.equal(statusNeedsValue('verify_needed'), true);
+  assert.equal(statusNeedsValue('requested'), false);
+  assert.equal(statusNeedsValue('not_entered'), false);
+  assert.equal(statusNeedsValue('na'), false);
+});
+
+test('[계산기] 현재 배압 < 기준 배압이면 경고 · GT 배압 초과분 0 (HRSG 차압 초과분은 그대로)', () => {
+  const d = deriveCalculator(calcWith({ currentBp: '200' }));
+  assert.equal(d.warnings.bpBelowBaseline, true);
+  assert.equal(Math.round(d.metrics.deltaBp.value! * 10) / 10, 51.0); // 차압 30 − 설계 25 mbar
+  assert.equal(d.valid, true);
+  assert.equal(deriveCalculator(defaultCalc()).warnings.bpBelowBaseline, false);
+});
+
+test('[보안] 전화번호·이메일·발전소 고유 명칭 마스킹', () => {
+  const q = '서인천발전소 배압 문의 010-1234-5678, kim@plant.co.kr / 02-555-1234';
+  const m = maskSensitive(q);
+  assert.ok(!m.includes('010-1234-5678') && !m.includes('kim@plant.co.kr') && !m.includes('02-555-1234'));
+  assert.ok(!m.includes('서인천발전소'));
+  assert.ok(m.includes(MASK) && m.includes('배압 문의'));
+  // 일반 명사·공학 수치는 그대로
+  assert.equal(maskSensitive('복합화력발전소 HRSG 배압 350 mmH2O, 2026-11-04'), '복합화력발전소 HRSG 배압 350 mmH2O, 2026-11-04');
+  assert.equal(maskSensitive('Riverside Power Plant pinch'), `${MASK} pinch`);
+  assert.equal(maskSensitive('고객사 시연전력 확인', ['시연전력']), `고객사 ${MASK} 확인`);
+});
+
+test('[보안] 환각 가드 — 검색 문맥에 없는 수치를 찾는다', () => {
+  const ctx = ['Pinch point is typically 8 to 15 °C.', 'Back pressure rose by 1,200 Pa.'];
+  assert.deepEqual(findUnsupportedNumbers('핀치는 8~15 °C [1], 배압 1200 Pa 상승 [2].', ctx), []);
+  assert.deepEqual(findUnsupportedNumbers('효율이 3.5% 떨어지고 출력이 42 MW 감소 [1].', ctx), ['3.5', '42']);
+});
+
+test('[세정전후] 부하율 편차 5 %p 또는 외기온도 편차 5 °C 초과 시 경고', () => {
+  assert.equal(assessConditionDeviation({ beforeLoadPct: '100', afterLoadPct: '94', beforeAmbientC: '', afterAmbientC: '' }).exceeded, true);
+  assert.equal(assessConditionDeviation({ beforeLoadPct: '100', afterLoadPct: '96', beforeAmbientC: '-3', afterAmbientC: '1' }).exceeded, false);
+  assert.equal(assessConditionDeviation({ beforeLoadPct: '', afterLoadPct: '', beforeAmbientC: '-3', afterAmbientC: '3' }).exceeded, true);
+  assert.equal(assessConditionDeviation({ beforeLoadPct: '', afterLoadPct: '', beforeAmbientC: '', afterAmbientC: '' }).loadDiff, null);
+});
+
+test('[대시보드] KPI·공법 회수 기간(키트)·실측 갭·4단계 진행률', () => {
+  const d = deriveCalculator(defaultCalc());
+  const k = buildCalcSummaryKpi(d);
+  assert.equal(k.backPressure, 305.9);
+  assert.equal(Math.round(k.lossMW! * 100) / 100, 1.89);
+  assert.equal(Math.round(k.recoveryBenefitPct! * 100) / 100, Math.round((d.metrics.recoveredMw.value! / 270) * 10000) / 100);
+  const methods = buildMethodPaybacks(d);
+  assert.deepEqual(methods.map((m) => m.method.id), ['mechanical', 'water', 'dryice', 'chemical']);
+  assert.equal(methods.find((m) => m.method.id === 'dryice')!.paybackMonths, d.kit.methods.find((m) => m.id === 'dryice')!.payback_months);
+  // 실측 배압으로 키트 손실을 다시 계산 — 세정 전 평균 450 mmH₂O, 현재 270 mmH₂O
+  const gap = buildActualPerformanceGap(
+    [
+      { id: 1, day: -5, backPressure: 450, exhaustTemp: 95 },
+      { id: 2, day: 0, backPressure: 260, exhaustTemp: 90 },
+      { id: 3, day: 30, backPressure: 270, exhaustTemp: null },
+    ],
+    d,
+    20,
+  );
+  assert.equal(gap.d0BackPressure, 260);
+  assert.equal(gap.currentBackPressure, 270);
+  assert.equal(gap.currentStackTemp, 90);
+  const expected = kitLossAtBp(d.kit.run, 450)! - kitLossAtBp(d.kit.run, 270)!;
+  assert.equal(gap.actualRecoveryMW, Math.round(expected * 1e6) / 1e6);
+  assert.ok(gap.actualRecoveryMW! > 0);
+  assert.equal(gap.bepAchieved, true);
+  assert.equal(buildActualPerformanceGap([], d, 20).d0BackPressure, null);
+  const steps = buildStepProgress({ requiredMet: false, calcValid: true, calcStale: true, snapshots: 1, aiMessages: 0 });
+  assert.deepEqual(steps, { data: false, simulation: false, analysis: true, ai: false });
 });

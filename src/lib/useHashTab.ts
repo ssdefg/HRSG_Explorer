@@ -5,21 +5,36 @@ import { DEFAULT_TAB, SECTION_IDS, isTabId } from '@/data/tabs';
 /** 페이지 이동 후 스크롤할 섹션 (한 번 소비되면 지워진다) */
 let pendingSection: string | null = null;
 
+/** 화면 → URL 해시 (가이드 §1.1: #dashboard · #calculator · #checklist · #before-after) */
+const TAB_HASH: Record<TabId, string> = {
+  dashboard: 'dashboard',
+  calculator: 'calculator',
+  checklist: 'checklist',
+  validation: 'before-after',
+};
+
+export function hashFor(t: TabId): string {
+  return `#${TAB_HASH[t]}`;
+}
+
 function readHash(): TabId {
   const h = window.location.hash.replace(/^#\/?/, '');
   // 폐지된 독립 메뉴: AI 질의응답(#/qa) → 대시보드 최상단 AI 질의응답 영역으로 이동
   if (h === 'qa') {
     pendingSection = SECTION_IDS.ai;
-    window.history.replaceState(null, '', '#/dashboard');
+    window.history.replaceState(null, '', hashFor('dashboard'));
     return 'dashboard';
   }
-  return isTabId(h) ? h : DEFAULT_TAB;
+  const tab = (Object.keys(TAB_HASH) as TabId[]).find((t) => TAB_HASH[t] === h) ?? (isTabId(h) ? h : null);
+  // 이전 형식(#/validation, #/calculator)은 새 형식으로 바꿔 둔다
+  if (tab && window.location.hash !== hashFor(tab)) window.history.replaceState(null, '', hashFor(tab));
+  return tab ?? DEFAULT_TAB;
 }
 
 /** 다른 화면으로 이동. section을 주면 해당 화면이 그려진 뒤 그 영역으로 스크롤한다. */
 export function goToTab(t: TabId, opts: { section?: string } = {}): void {
   pendingSection = opts.section ?? null;
-  if (window.location.hash !== `#/${t}`) window.location.hash = `/${t}`;
+  if (window.location.hash !== hashFor(t)) window.location.hash = TAB_HASH[t];
   else window.dispatchEvent(new HashChangeEvent('hashchange'));
   if (!opts.section) window.scrollTo({ top: 0 });
 }
@@ -41,7 +56,7 @@ export function scrollToSection(id: string): boolean {
   return true;
 }
 
-/** URL 해시(#/calculator)와 활성 화면을 동기화 — 새로고침·뒤로가기에도 유지된다. */
+/** URL 해시(#calculator)와 활성 화면을 동기화 — 새로고침·뒤로가기에도 유지된다. */
 export function useHashTab(): [TabId, (t: TabId) => void, number] {
   const [tab, setTabState] = useState<TabId>(readHash);
   // 같은 탭으로의 재이동(섹션 이동)도 페이지가 감지하도록 카운터를 둔다

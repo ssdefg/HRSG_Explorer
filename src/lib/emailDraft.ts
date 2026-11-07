@@ -1,5 +1,5 @@
 import type { Lang } from '@/types';
-import { CHECKLIST_CATEGORY_LABEL, type ChecklistCategory, type ChecklistItem } from '@/data/checklistItems';
+import { CHECKLIST_CATEGORIES, CHECKLIST_CATEGORY_LABEL, type ChecklistItem } from '@/data/checklistItems';
 import { VALIDATION_SCENARIO } from '@/data/validationScenario';
 
 const { daysBefore: PRE, daysAfter: POST } = VALIDATION_SCENARIO;
@@ -17,27 +17,71 @@ export interface EmailOptions {
   notes?: Record<string, string>;
 }
 
+const cell = (v: string) => v.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim() || '-';
+
+/** '요청 필요' 항목 마크다운 표 (가이드 §2.4 이메일 초안 생성기) */
+export function buildItemsTable(items: ChecklistItem[], lang: Lang, opts: EmailOptions = {}): string[] {
+  const ko = lang === 'ko';
+  const head = ko
+    ? ['No', 'ID', '분류', '요청 항목', '형식', '필요 단위', '측정 조건', '추가 설명']
+    : ['No', 'ID', 'Category', 'Item', 'Format', 'Unit', 'Measurement condition', 'Note'];
+  const cats = CHECKLIST_CATEGORIES;
+  const sorted = cats.flatMap((c) => items.filter((i) => i.category === c));
+  return [
+    `| ${head.join(' | ')} |`,
+    `|${head.map(() => '---').join('|')}|`,
+    ...sorted.map((i, idx) =>
+      `| ${[
+        String(idx + 1),
+        i.id,
+        CHECKLIST_CATEGORY_LABEL[i.category][lang],
+        i.name[lang],
+        i.format[lang],
+        opts.meta?.[i.id]?.unit ?? '',
+        opts.meta?.[i.id]?.condition ?? '',
+        opts.notes?.[i.id] ?? '',
+      ]
+        .map(cell)
+        .join(' | ')} |`,
+    ),
+  ];
+}
+
+const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** 초안 본문(마크다운 표 포함) → 메일 클라이언트에 붙여 넣을 HTML */
+export function emailBodyToHtml(body: string): string {
+  const out: string[] = [];
+  const rows: string[][] = [];
+  const flush = () => {
+    if (rows.length === 0) return;
+    const [h, ...rest] = rows;
+    const td = 'style="border:1px solid #cbd5e1;padding:4px 8px"';
+    out.push(
+      `<table style="border-collapse:collapse;font-size:13px"><thead><tr>${h.map((c) => `<th ${td}>${esc(c)}</th>`).join('')}</tr></thead><tbody>${rest
+        .map((r) => `<tr>${r.map((c) => `<td ${td}>${esc(c)}</td>`).join('')}</tr>`)
+        .join('')}</tbody></table>`,
+    );
+    rows.length = 0;
+  };
+  for (const line of body.split('\n')) {
+    if (/^\|.*\|$/.test(line.trim())) {
+      if (/^\|(\s*-+\s*\|)+$/.test(line.trim())) continue;
+      rows.push(line.trim().slice(1, -1).split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|')));
+      continue;
+    }
+    flush();
+    out.push(line.trim() === '' ? '<br>' : `<div>${esc(line)}</div>`);
+  }
+  flush();
+  return out.join('\n');
+}
+
 export function buildRequestEmail(items: ChecklistItem[], lang: Lang, opts: EmailOptions = {}): { subject: string; body: string } {
   const ko = lang === 'ko';
   const client = opts.clientName?.trim() || (ko ? '[고객사/발전소명]' : '[client / plant name]');
-  const cats: ChecklistCategory[] = ['A', 'B', 'C'];
-  const lines: string[] = [];
-
-  for (const cat of cats) {
-    const list = items.filter((i) => i.category === cat);
-    if (list.length === 0) continue;
-    lines.push(`[${CHECKLIST_CATEGORY_LABEL[cat][lang]}]`);
-    list.forEach((i, idx) => {
-      lines.push(`  ${idx + 1}. ${i.name[lang]} — ${i.format[lang]}`);
-      const unit = opts.meta?.[i.id]?.unit?.trim();
-      const cond = opts.meta?.[i.id]?.condition?.trim();
-      const note = opts.notes?.[i.id]?.trim();
-      if (unit) lines.push(`     · ${ko ? '필요 단위' : 'Unit'}: ${unit}`);
-      if (cond) lines.push(`     · ${ko ? '측정 조건' : 'Measurement condition'}: ${cond}`);
-      if (note) lines.push(`     · ${ko ? '추가 설명' : 'Note'}: ${note}`);
-    });
-    lines.push('');
-  }
+  const lines = buildItemsTable(items, lang, opts);
+  lines.push('');
 
   if (ko) {
     return {

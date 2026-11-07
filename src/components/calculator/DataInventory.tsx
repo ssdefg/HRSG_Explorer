@@ -3,12 +3,11 @@ import { Card, DataTypeBadge, DataTypeBadges } from '@/components/ui';
 import { useAppSettings } from '@/context/AppSettings';
 import { useCalcText } from '@/i18n/calculatorStrings';
 import { formatNumber, pick } from '@/lib/format';
-import { BP_THRESHOLDS, POWER_LOSS_COEFF_MW_PER_MMH2O } from '@/lib/calc';
+import { KIT_CALC_DATA } from '@/lib/kit';
 import type { CalculatorState } from '@/context/Workspace';
 import type { MetricId } from '@/lib/calculatorModel';
 import { METRIC_STATUS_TEXT } from './metricText';
 import { HRSG_CLASSES, NUMERIC_INPUTS } from '@/data/calculatorInputs';
-import { MOCK_CLEANING_METHODS } from '@/data/mockCleaning';
 import { SECTION_IDS } from '@/data/tabs';
 
 interface Row {
@@ -58,10 +57,28 @@ export function DataInventory({ state }: { state: CalculatorState }) {
       title: c.invAssumptions,
       rows: [
         {
-          key: 'coeff',
-          name: c.invCoeff,
-          value: String(POWER_LOSS_COEFF_MW_PER_MMH2O),
-          unit: 'MW/mmH₂O',
+          key: 'coeff-gt',
+          name: `${c.invCoeff} (GT)`,
+          value: String(KIT_CALC_DATA.constants.gt_loss_pct_per_mbar),
+          unit: '%/mbar',
+          types: ['example', 'unconfirmed'],
+          provisional: true,
+          replace: 'model',
+        },
+        {
+          key: 'coeff-st',
+          name: `${c.invCoeff} (ST)`,
+          value: String(KIT_CALC_DATA.constants.st_loss_pct_per_c),
+          unit: '%/°C',
+          types: ['example', 'unconfirmed'],
+          provisional: true,
+          replace: 'model',
+        },
+        {
+          key: 'outage-margin',
+          name: lang === 'ko' ? '정지 손실 마진율' : 'Outage margin ratio',
+          value: String(KIT_CALC_DATA.constants.outage_margin_ratio),
+          unit: '—',
           types: ['example', 'unconfirmed'],
           provisional: true,
           replace: 'model',
@@ -69,7 +86,7 @@ export function DataInventory({ state }: { state: CalculatorState }) {
         {
           key: 'thr-c',
           name: c.invThrCaution,
-          value: n(BP_THRESHOLDS.caution),
+          value: n(state.bands?.caution ?? null, 1),
           unit: 'mmH₂O',
           types: ['unconfirmed'],
           provisional: true,
@@ -78,7 +95,7 @@ export function DataInventory({ state }: { state: CalculatorState }) {
         {
           key: 'thr-d',
           name: c.invThrDanger,
-          value: n(BP_THRESHOLDS.danger),
+          value: n(state.bands?.danger ?? null, 1),
           unit: 'mmH₂O',
           types: ['unconfirmed'],
           provisional: true,
@@ -88,22 +105,22 @@ export function DataInventory({ state }: { state: CalculatorState }) {
     },
     {
       title: c.invCleaning,
-      rows: MOCK_CLEANING_METHODS.flatMap<Row>((m) => [
+      rows: KIT_CALC_DATA.methods.flatMap<Row>((m) => [
         {
           key: `${m.id}-cost`,
-          name: `${m.label[lang]} · ${c.cleanCost}`,
-          value: n(m.costKrw),
+          name: `${m.name} · ${c.cleanCost}`,
+          value: n(m.cost_krw),
           unit: won,
           types: ['mock'],
           provisional: true,
           replace: 'noMeasured',
         },
         {
-          key: `${m.id}-benefit`,
-          name: `${m.label[lang]} · ${c.cleanBenefit}`,
-          value: n(m.monthlyBenefitKrw),
-          unit: won,
-          types: ['mock'],
+          key: `${m.id}-ratio`,
+          name: `${m.name} · ${lang === 'ko' ? '회수율' : 'recovery ratio'}`,
+          value: m.recovery_ratio === null ? '—' : String(m.recovery_ratio),
+          unit: '0~1',
+          types: ['mock', 'unconfirmed'],
           provisional: true,
           replace: 'noMeasured',
         },
@@ -117,10 +134,12 @@ export function DataInventory({ state }: { state: CalculatorState }) {
             ['deltaBp', c.stepDelta, 'mmH₂O', 0],
             ['powerLossMw', c.stepPower, 'MW', 2],
             ['monthlyLossKrw', c.stepMonthly, won, 0],
-            ['additionalRevenueKrw', lang === 'ko' ? '추가 발전 매출' : 'Additional revenue', won, 0],
-            ['shutdownLossKrw', lang === 'ko' ? '정지 손실' : 'Shutdown loss', won, 0],
-            ['netBenefitKrw', lang === 'ko' ? '세정 순편익 (첫 1개월)' : 'Net benefit (first month)', won, 0],
-            ['paybackMonths', lang === 'ko' ? '단순 회수 기간' : 'Simple payback', lang === 'ko' ? '개월' : 'months', 2],
+            ['recoveredMw', lang === 'ko' ? '세정 예상 회수 출력' : 'Expected recovered output', 'MW', 2],
+            ['shutdownLossKrw', lang === 'ko' ? '정지 손실' : 'Outage loss', won, 0],
+            ['initialInvestmentKrw', lang === 'ko' ? '총투자' : 'Total investment', won, 0],
+            ['netBenefitKrw', lang === 'ko' ? '첫 달 순편익' : 'First-month net', won, 0],
+            ['paybackMonths', lang === 'ko' ? '투자 회수기간' : 'Payback', lang === 'ko' ? '개월' : 'months', 2],
+            ['cleaningScore', lang === 'ko' ? '세정 필요도 지수' : 'Cleaning-need score', '/100', 1],
             ['breakEvenDays', lang === 'ko' ? '손익분기' : 'Break-even', lang === 'ko' ? '일' : 'd', 1],
           ] as [MetricId, string, string, number][]
         ).map<Row>(([id, name, unit, digits]) => ({

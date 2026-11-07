@@ -1,4 +1,5 @@
 import type { Lang } from '@/types';
+import type { ContextSnapshot } from '@/lib/aiContext';
 
 /**
  * 참고문헌 RAG 서버(server/app.py) 클라이언트.
@@ -18,6 +19,13 @@ export interface RagSource {
   file: string;
   /** 문단 전문 */
   text: string;
+  /** 서지 (rag/bibliography.json) — 없으면 null */
+  title?: string | null;
+  doi?: string | null;
+  citation?: string | null;
+  /** 검색 방식 — BGE-M3 dense · BM25 각각의 후보 순위 (후보 40개 밖이면 null) */
+  dense_rank?: number | null;
+  bm25_rank?: number | null;
 }
 
 export type RagLlmStatus = 'ok' | 'unavailable' | 'refusal' | 'error';
@@ -45,13 +53,18 @@ export class RagUnavailableError extends Error {}
 
 const ASK_TIMEOUT_MS = 120_000;
 
-export async function askRag(question: string, lang: Lang): Promise<RagResult> {
+/** 서버로 보내는 화면 데이터 — 라벨·값·단위만 (id·시각 등 내부 필드는 보내지 않음) */
+export function contextPayload(ctx: ContextSnapshot) {
+  return { page: ctx.page, title: ctx.title, items: ctx.items.map(({ label, value, unit }) => ({ label, value, unit: unit ?? null })) };
+}
+
+export async function askRag(question: string, lang: Lang, context?: ContextSnapshot): Promise<RagResult> {
   let res: Response;
   try {
     res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, lang }),
+      body: JSON.stringify({ question, lang, context: context ? contextPayload(context) : null }),
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
     });
   } catch (e) {

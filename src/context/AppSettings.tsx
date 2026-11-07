@@ -13,9 +13,17 @@ interface AppSettingsValue {
 
 const AppSettingsContext = createContext<AppSettingsValue | null>(null);
 
-function initialTheme(): ThemeMode {
-  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
-  return readStored<ThemeMode>('hrsg.theme', ['light', 'dark'], prefersDark ? 'dark' : 'light');
+/** 저장된 테마가 없으면 라이트가 기본 (OS 설정을 따르지 않음) — index.html 의 인라인 스크립트와 같은 규칙 */
+export function initialTheme(): ThemeMode {
+  return readStored<ThemeMode>('hrsg.theme', ['light', 'dark'], 'light');
+}
+
+/** html[data-theme] + 다크일 때만 html.dark 클래스 */
+export function applyTheme(t: ThemeMode): void {
+  const el = document.documentElement;
+  el.dataset.theme = t;
+  el.classList.toggle('dark', t === 'dark');
+  el.style.colorScheme = t;
 }
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
@@ -26,9 +34,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+  useEffect(() => applyTheme(theme), [theme]);
 
   const setLang = useCallback((l: Lang) => {
     setLangState(l);

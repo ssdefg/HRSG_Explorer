@@ -3,10 +3,9 @@ import { Card, DataTypeBadges, SegmentedToggle, StatusBadge } from '@/components
 import { useAppSettings } from '@/context/AppSettings';
 import { useHistory, useQa, useToast, type CalculatorState } from '@/context/Workspace';
 import { useCalcText } from '@/i18n/calculatorStrings';
-import { goToTab } from '@/lib/useHashTab';
+import { usePageContext } from '@/components/assistant/usePageContext';
 import type { EvaluationMode } from '@/lib/calc';
 import { DEMO_SCENARIOS, SCENARIO_LABEL, type ScenarioId } from '@/data/calculatorInputs';
-import { SECTION_IDS } from '@/data/tabs';
 import { LEVEL_STATUS, levelLabel } from './level';
 
 const TXT = {
@@ -15,7 +14,7 @@ const TXT = {
     mode: '평가 모드',
     demo: 'DEMO 시나리오',
     user: '사용자 입력',
-    demoDesc: '고정 예시 시나리오와 예시 계산 엔진으로 즉시 재계산합니다. 모든 값은 가상 데이터입니다.',
+    demoDesc: '고정 예시 시나리오와 예시 계산 엔진으로 계산합니다. 입력을 바꾸면 "재평가 실행" 전까지 결과가 가려집니다. 모든 값은 가상 데이터입니다.',
     userDesc:
       '직접 입력한 값으로 계산합니다. 단위 환산·산술로 정의되는 경제성 항목만 계산하고, 검증되지 않은 배압→출력 손실 모델은 "모델 미연동"으로 보류합니다. 입력했다고 공학적으로 검증된 결과가 되지는 않습니다.',
     scenario: '운전 시나리오 (선택)',
@@ -24,19 +23,23 @@ const TXT = {
     auto: '배압 기반 자동 판별 (DEMO 임계값)',
     autoNone: '판별 불가 (입력 확인)',
     scenarioUserMode: '사용자 입력 모드에서는 시나리오 프리셋을 쓰지 않습니다.',
-    ask: '이 결과 질문하기',
+    run: '계산 실행',
+    rerun: '재평가 실행',
+    staleNote: '입력값이 바뀌었습니다 — 결과는 재평가 전까지 가려집니다.',
+    staleAsk: '재평가 후에 질문할 수 있습니다 — 먼저 "재평가 실행"을 눌러 주세요.',
+    ask: 'AI에게 질문하기',
     save: '분석 스냅샷 저장',
     saved: (n: number) => `분석 스냅샷 #${n}을 저장했습니다.`,
     invalid: '계산 결과가 없습니다 — 입력값 오류를 먼저 보완해 주세요. 숫자를 AI로 전달하지 않았습니다.',
     draft: (n: number, model: string, mode: string) =>
-      `계산 결과 스냅샷 #${n} (${model}, ${mode})의 의미와 판단 전에 추가로 필요한 데이터를 알려 주세요.`,
+      `첨부한 계산 결과(스냅샷 #${n}, ${model}, ${mode})의 의미와 판단 전에 추가로 필요한 데이터를 문헌 근거와 함께 알려 주세요.`,
   },
   en: {
     title: 'Evaluation settings',
     mode: 'Evaluation mode',
     demo: 'DEMO scenario',
     user: 'User input',
-    demoDesc: 'Recalculates instantly with fixed example scenarios and the example engine. All values are mock data.',
+    demoDesc: 'Calculates with fixed example scenarios and the example engine. After an input change, results stay hidden until you re-evaluate. All values are mock data.',
     userDesc:
       'Calculates from values you enter. Only arithmetic/unit-conversion economics are computed; the unverified back-pressure→loss model is held as "model not connected". Entering values does not make results engineering-validated.',
     scenario: 'Operating scenario (selection)',
@@ -45,12 +48,16 @@ const TXT = {
     auto: 'Auto status from back pressure (DEMO thresholds)',
     autoNone: 'Not determinable (check input)',
     scenarioUserMode: 'Scenario presets are not used in user-input mode.',
-    ask: 'Ask about this result',
+    run: 'Run calculation',
+    rerun: 'Re-evaluate',
+    staleNote: 'Inputs changed — results stay hidden until you re-evaluate.',
+    staleAsk: 'Re-evaluate first, then ask about the result.',
+    ask: 'Ask AI about this result',
     save: 'Save analysis snapshot',
     saved: (n: number) => `Saved analysis snapshot #${n}.`,
     invalid: 'No calculation result — fix the input errors first. No numbers were sent to the AI.',
     draft: (n: number, model: string, mode: string) =>
-      `What does calculation snapshot #${n} (${model}, ${mode}) mean, and what additional data is needed before judging?`,
+      `What do the attached results (snapshot #${n}, ${model}, ${mode}) mean, and what additional data is needed before judging? Cite the literature.`,
   },
 };
 
@@ -62,10 +69,15 @@ export function CalculatorControls({ state }: { state: CalculatorState }) {
   const c = useCalcText();
   const history = useHistory();
   const qa = useQa();
+  const pageContext = usePageContext();
   const toast = useToast();
   const [askError, setAskError] = useState(false);
 
   const askAi = () => {
+    if (state.stale) {
+      toast.push(x.staleAsk, 'error');
+      return;
+    }
     const snap = history.saveSnapshot();
     if (!snap) {
       setAskError(true);
@@ -73,12 +85,15 @@ export function CalculatorControls({ state }: { state: CalculatorState }) {
       return;
     }
     setAskError(false);
-    qa.setAttachment(snap.id);
-    qa.setDraft(x.draft(snap.seq, snap.model, state.mode === 'demo' ? x.demo : x.user));
-    goToTab('dashboard', { section: SECTION_IDS.ai });
+    // 분석 이력에도 남기고, 계산기 화면 데이터(입력·결과·경제성·핀치)를 어시스턴트에 첨부해 연다 — 페이지 이동 없음
+    qa.openAssistant({ context: pageContext('calculator'), draft: x.draft(snap.seq, snap.model, state.mode === 'demo' ? x.demo : x.user) });
   };
 
   const save = () => {
+    if (state.stale) {
+      toast.push(x.staleAsk, 'error');
+      return;
+    }
     const snap = history.saveSnapshot();
     if (!snap) {
       setAskError(true);
@@ -146,7 +161,20 @@ export function CalculatorControls({ state }: { state: CalculatorState }) {
         </div>
 
         <div className="calc-controls__block calc-controls__actions">
-          <button type="button" className="btn btn--primary" onClick={askAi} data-testid="ask-ai">
+          <button
+            type="button"
+            className={`btn ${state.stale ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={state.commit}
+            data-testid="run-calc"
+          >
+            {state.stale ? x.rerun : x.run}
+          </button>
+          {state.stale && (
+            <p className="field__warn" role="status" data-testid="stale-note">
+              <DataTypeBadges types={['stale']} /> {x.staleNote}
+            </p>
+          )}
+          <button type="button" className="btn btn--primary" onClick={askAi} data-testid="ask-ai" disabled={state.stale}>
             {x.ask}
           </button>
           <button type="button" className="btn btn--ghost" onClick={save}>

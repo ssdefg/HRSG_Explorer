@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="HRSG Maintenance Decision Support Platform — UI prototype (mock data only)" />
     <title>HRSG Maintenance Decision Support Platform</title>
+    <!-- 첫 페인트 전에 테마 적용 (FOUC 방지) — 저장값이 없으면 라이트가 기본. 다크일 때만 html.dark 클래스 -->
+    <script>
+      (function () {
+        var t = 'light';
+        try {
+          if (localStorage.getItem('hrsg.theme') === 'dark') t = 'dark';
+        } catch (e) {}
+        var el = document.documentElement;
+        el.dataset.theme = t;
+        el.classList.toggle('dark', t === 'dark');
+        el.style.colorScheme = t;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -86,13 +86,17 @@ class HybridRetriever:
             for rank, i in enumerate(ranking, 1):
                 rrf[int(i)] += w / (RRF_K + rank)
 
+        # 화면 표시용 — 각 문단이 어느 검색에서 몇 위였는지 (결합 점수·순서에는 영향 없음)
+        dense_rank = {int(i): r for r, i in enumerate(dense_top, 1)}
+        bm25_rank = {int(i): r for r, i in enumerate(bm25_top, 1)}
+
         results, per_doc = [], defaultdict(int)
         for i, score in sorted(rrf.items(), key=lambda kv: -kv[1]):
             meta = self.metadata[i]
             if per_doc[meta["doc_id"]] >= MAX_PER_DOC:
                 continue
             per_doc[meta["doc_id"]] += 1
-            results.append({**meta, "rrf_score": score})
+            results.append({**meta, "rrf_score": score, "dense_rank": dense_rank.get(i), "bm25_rank": bm25_rank.get(i)})
             if len(results) == top_k:
                 break
         return results

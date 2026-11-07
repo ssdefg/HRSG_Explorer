@@ -144,6 +144,29 @@
   font-weight: 700;
 }
 
+/* Reliability badge colours (가이드 §2.1) */
+.badge--data-mock { color: var(--c-rel-purple); border-color: currentColor; }
+.badge--data-example { color: var(--c-ink-3); }
+.badge--data-unconfirmed { color: var(--c-rel-orange); border-color: currentColor; }
+.badge--data-noMeasured {
+  color: var(--c-warning-ink);
+  border: 1px solid var(--c-warning);
+  background: transparent;
+}
+.badge--data-userInput { color: var(--c-rel-blue); border-color: currentColor; }
+.badge--data-literature { color: var(--c-rel-green); border-color: currentColor; }
+.badge--data-notComputable {
+  color: var(--c-warning-ink);
+  border: 1px solid var(--c-warning);
+  background: var(--c-warning-bg);
+}
+.badge--data-stale {
+  color: var(--c-caution-ink);
+  border: 1px solid var(--c-caution);
+  background: var(--c-caution-bg);
+  font-weight: 700;
+}
+
 /* Delta (변동률) */
 .badge--delta {
   font-family: var(--font-mono);
