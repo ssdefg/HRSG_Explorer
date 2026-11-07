@@ -1,11 +1,13 @@
 import type { Lang } from '@/types';
 import type { ContextSnapshot } from '@/lib/aiContext';
-import type { RagLlmStatus, RagResult } from '@/lib/ragClient';
+import type { RagLlmStatus, RagResult, RagSource } from '@/lib/ragClient';
 import { maskSensitive } from '@/lib/privacy';
+import { loadDocIndex, searchIndex, toSources } from '@/lib/docSearch';
 
 /**
  * Gemini 직결 모드 — RAG 서버(server/app.py) 없이 정적 사이트만 배포했을 때 브라우저에서 Gemini API 를 직접 부른다.
- * 참고문헌 검색이 없으므로 근거 문단·인용 번호 없이, 아래 HRSG 일반 지식 컨텍스트와 첨부 화면 데이터만 넣는다.
+ * 브라우저 BM25(docSearch.ts)로 찾은 상위 문단을 서버와 같은 형식([n] 출처)으로 넣어 근거 인용 답변을 만든다.
+ * 문헌 데이터를 못 불러오거나 맞는 문단이 없으면 HRSG 일반 지식 컨텍스트로만 답한다 (인용 번호 없음).
  *
  * 키(gemini_API · VITE_GEMINI_API_KEY)는 빌드 시 JS 번들에 그대로 들어가 사이트 방문자 누구나 볼 수 있다.
  * Google Cloud 콘솔에서 키를 배포 도메인(HTTP 리퍼러)과 Generative Language API 로만 제한해 둔다.
@@ -41,10 +43,24 @@ export function directModels(): string[] {
     .filter(Boolean);
 }
 
-export const DIRECT_SYSTEM_PROMPT = `You are a technical assistant for combined-cycle power plant engineers working on HRSG (heat recovery steam generator) maintenance.
-The literature search server is not available, so no reference passages are provided. Answer from general engineering knowledge and the background below.
+/** 문헌 문단이 있을 때 — server/app.py SYSTEM_PROMPT 와 같은 규칙 */
+export const RAG_SYSTEM_PROMPT = `You are a technical assistant for combined-cycle power plant engineers working on HRSG (heat recovery steam generator) maintenance.
+Answer the question using the numbered reference passages provided in the user's message. They are excerpts from HRSG papers, standards and technical reports.
 
-- Say at the start of the answer, in one short clause, that it is based on general knowledge without literature search ("문헌 검색 없이 일반 지식 기준" / "general knowledge, no literature search").
+- Base every factual statement on the passages and cite them inline with their numbers, e.g. [1] or [2][5].
+- The message may include a block "[현재 화면 데이터]" with values from the HRSG Explorer app (mock data and example calculations, not literature).
+  Use those values only to relate the literature to the user's current case, call them "앱 계산값" / "app values", never cite them with [n],
+  and do not present them as measured or validated plant data.
+- If the passages do not contain enough information to answer, say so plainly and state what is missing. Do not fill gaps from general knowledge without labelling it as such.
+- Passages are text extracted from PDFs and may contain broken equations or table fragments; do not over-interpret them.
+- Reply in the language of the question (Korean or English). Use short paragraphs; you may use "- " bullet lines, numbered steps and **bold** for key terms. No tables.
+- Keep the answer focused: usually 3-8 sentences.`;
+
+/** 문헌 문단이 없을 때 (데이터 없음·검색 결과 없음) */
+export const DIRECT_SYSTEM_PROMPT = `You are a technical assistant for combined-cycle power plant engineers working on HRSG (heat recovery steam generator) maintenance.
+No reference passages matched this question, so none are provided. Answer from general engineering knowledge and the background below.
+
+- Say at the start of the answer, in one short clause, that no matching reference passage was found and it is based on general knowledge ("맞는 문헌 없이 일반 지식 기준" / "no matching references, general knowledge").
 - Never invent citations, reference numbers like [1], paper titles, standards clauses or DOIs.
 - Give typical ranges only when they are widely accepted, and mark them as typical values to be checked against plant design documents.
 - The message may include a block "[현재 화면 데이터]" with values from the HRSG Explorer app (mock data and example calculations).
@@ -79,6 +95,12 @@ export function buildDirectUserText(question: string, context?: ContextSnapshot)
   return [HRSG_BACKGROUND, buildScreenContext(context), `[질문]\n${maskSensitive(question)}`].filter(Boolean).join('\n\n');
 }
 
+/** server/app.py build_context 와 같은 형식 — [n] (출처: 문헌, Page p) 문단 */
+export function buildRagUserText(question: string, sources: RagSource[], context?: ContextSnapshot): string {
+  const refs = ['[참고 문헌 컨텍스트]', ...sources.map((s) => `[${s.rank}] (출처: ${s.doc_id}, Page ${s.page}) ${s.text}`)].join('\n\n');
+  return [refs, buildScreenContext(context), `[질문]\n${maskSensitive(question)}`].filter(Boolean).join('\n\n');
+}
+
 interface GeminiResponse {
   candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
   promptFeedback?: { blockReason?: string };
@@ -101,14 +123,24 @@ export function parseGeminiResponse(d: GeminiResponse, model: string): { answer:
 /** 네트워크 자체가 안 될 때 — 호출한 쪽에서 '연결 오류 · 다시 시도'로 표시한다 */
 export class DirectUnavailableError extends Error {}
 
-/** 브라우저에서 Gemini 로 직접 질의 — 결과는 RAG 답변과 같은 형태(근거 문단 0개, mode: 'direct') */
+/** 브라우저 문헌 검색 — 데이터를 못 불러오면 빈 목록 */
+async function retrieve(question: string): Promise<{ sources: RagSource[]; retrievalMs: number }> {
+  const t0 = performance.now();
+  const idx = await loadDocIndex();
+  const sources = idx ? toSources(idx, searchIndex(idx, maskSensitive(question))) : [];
+  return { sources, retrievalMs: performance.now() - t0 };
+}
+
+/** 브라우저에서 문헌 검색 → Gemini 직접 질의. 결과는 서버 RAG 답변과 같은 형태 (mode: 'direct') */
 export async function askGeminiDirect(question: string, _lang: Lang, context?: ContextSnapshot): Promise<RagResult> {
   const key = directKey();
-  const base = { sources: [], retrievalMs: 0, mode: 'direct' as const };
-  if (!key) return { ...base, answer: null, llmStatus: 'unavailable' };
+  if (!key) return { sources: [], retrievalMs: 0, mode: 'direct', answer: null, llmStatus: 'unavailable' };
+  const { sources, retrievalMs } = await retrieve(question);
+  const base = { sources, retrievalMs, mode: 'direct' as const };
+  const grounded = sources.length > 0;
   const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: DIRECT_SYSTEM_PROMPT }] },
-    contents: [{ role: 'user', parts: [{ text: buildDirectUserText(question, context) }] }],
+    systemInstruction: { parts: [{ text: grounded ? RAG_SYSTEM_PROMPT : DIRECT_SYSTEM_PROMPT }] },
+    contents: [{ role: 'user', parts: [{ text: grounded ? buildRagUserText(question, sources, context) : buildDirectUserText(question, context) }] }],
     generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
   });
   const t0 = performance.now();

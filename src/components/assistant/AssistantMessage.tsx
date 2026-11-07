@@ -77,14 +77,14 @@ function RagAnswer({ msg, lang, question, convId }: { msg: RagMsg; lang: Lang; q
         <span className="asst-ans__who">{x.ai}</span>
         <span className="asst-ans__meta">
           {direct
-            ? `${msg.model ?? 'Gemini'} · ${x.directMeta}`
+            ? `${msg.model ?? 'Gemini'} · ${x.directMeta(msg.sources.length)} · ${Math.round(msg.retrievalMs)}ms`
             : `${msg.model ?? (lang === 'ko' ? '검색 전용' : 'search only')} · ${x.sources(msg.sources.length)} · ${Math.round(msg.retrievalMs)}ms`}
         </span>
         <time className="asst-time" dateTime={msg.at}>
           {fmtTime(msg.at, lang)}
         </time>
       </header>
-      {direct && <p className="asst-note asst-note--warn">{x.directNote}</p>}
+      {direct && msg.sources.length === 0 && msg.answer && <p className="asst-note asst-note--warn">{x.directNote}</p>}
       {unsupported.length > 0 && (
         <p className="asst-warn" role="alert" data-testid="unsupported-numbers">
           ⚠ {lang === 'ko' ? '출처 외 수치 포함 주의' : 'Contains figures not in sources'}: <span className="num">{unsupported.join(', ')}</span>
