@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** vite.config.ts define — 빌드 환경변수 gemini_API (없으면 VITE_GEMINI_API_KEY) 값. 번들에 포함되어 공개된다 */
+declare const __GEMINI_KEY__: string;
+
 interface ImportMetaEnv {
   /** Gemini 직결 모드 키 (정적 사이트 단독 배포용) — 빌드 시 번들에 포함되어 공개된다 */
   readonly VITE_GEMINI_API_KEY?: string;

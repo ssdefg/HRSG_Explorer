@@ -7,7 +7,7 @@ import { maskSensitive } from '@/lib/privacy';
  * Gemini 직결 모드 — RAG 서버(server/app.py) 없이 정적 사이트만 배포했을 때 브라우저에서 Gemini API 를 직접 부른다.
  * 참고문헌 검색이 없으므로 근거 문단·인용 번호 없이, 아래 HRSG 일반 지식 컨텍스트와 첨부 화면 데이터만 넣는다.
  *
- * VITE_GEMINI_API_KEY 는 빌드 시 JS 번들에 그대로 들어가 사이트 방문자 누구나 볼 수 있다.
+ * 키(gemini_API · VITE_GEMINI_API_KEY)는 빌드 시 JS 번들에 그대로 들어가 사이트 방문자 누구나 볼 수 있다.
  * Google Cloud 콘솔에서 키를 배포 도메인(HTTP 리퍼러)과 Generative Language API 로만 제한해 둔다.
  */
 
@@ -20,12 +20,13 @@ const FALLBACK_CODES = new Set([404, 429, 500, 502, 503, 504]);
 const BLOCKED_FINISH = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION', 'IMAGE_SAFETY']);
 
 /**
- * 빌드 시 주입된 키 — VITE_GEMINI_API_KEY, 없으면 VITE_gemini_API (테스트 런너처럼 import.meta.env 가 없으면 빈 문자열).
- * Vite 는 VITE_ 로 시작하는 변수만 번들에 넣으므로 접두사 없는 이름(gemini_API 등)은 읽을 수 없다.
+ * 빌드 시 주입된 키 — vite.config.ts define 의 __GEMINI_KEY__ (Render 환경변수 gemini_API 우선),
+ * 그다음 .env 의 VITE_GEMINI_API_KEY · VITE_gemini_API. 테스트 런너처럼 둘 다 없으면 빈 문자열.
  */
 function directKey(): string {
+  const defined = typeof __GEMINI_KEY__ === 'string' ? __GEMINI_KEY__ : '';
   const env = import.meta.env;
-  return (env?.VITE_GEMINI_API_KEY || env?.VITE_gemini_API || '').trim();
+  return (defined || env?.VITE_GEMINI_API_KEY || env?.VITE_gemini_API || '').trim();
 }
 
 /** 직결 모드를 쓸 수 있는지 — 키가 빌드에 들어 있을 때만 */

@@ -5,8 +5,15 @@ import { fileURLToPath, URL } from 'node:url';
 // 참고문헌 RAG API (python -m uvicorn server.app:app --port 8000) — 다른 포트면 RAG_API=http://127.0.0.1:8001
 const apiProxy = { '/api': process.env.RAG_API ?? 'http://127.0.0.1:8000' };
 
+// Standalone 모드 Gemini 키 — Render 환경변수 gemini_API (VITE_ 접두사가 없어 import.meta.env 로는 못 읽으므로 define 으로 주입).
+// 빌드 결과 JS 에 그대로 들어가 공개된다. 서버용 GEMINI_API_KEY 는 일부러 읽지 않는다.
+const geminiKey = process.env.gemini_API || process.env.VITE_GEMINI_API_KEY || process.env.VITE_gemini_API || '';
+
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __GEMINI_KEY__: JSON.stringify(geminiKey),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
